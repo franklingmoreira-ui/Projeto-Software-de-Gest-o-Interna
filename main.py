@@ -1,0 +1,190 @@
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import Column, Integer, String, Text, DateTime, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional
+import uvicorn
+import datetime
+import os
+import shutil
+
+# Garante que a pasta de uploads exista
+os.makedirs("uploads", exist_ok=True)
+
+# Configuração do Banco de Dados (Agora no MySQL!)
+SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:admin@db:3306/erp_banco"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# --- MODELOS DO BANCO DE DADOS ---
+
+class UsuarioDB(Base):
+    __tablename__ = "usuarios"
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String)
+    setor = Column(String)
+    login = Column(String, unique=True, index=True)
+    senha = Column(String)
+
+class TarefaDB(Base):
+    __tablename__ = "tarefas"
+    id = Column(Integer, primary_key=True, index=True)
+    titulo = Column(String)
+    setor_origem = Column(String)
+    setor_destino = Column(String)
+    descricao = Column(Text)
+    responsavel = Column(String, default="Pendente")
+    status = Column(String, default="todo")
+    link_flip = Column(String, nullable=True)
+
+class ComentarioDB(Base):
+    __tablename__ = "comentarios_tarefas"
+    id = Column(Integer, primary_key=True, index=True)
+    tarefa_id = Column(Integer, index=True)
+    autor = Column(String)
+    texto = Column(Text)
+    arquivo = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+class MensagemGlobalDB(Base):
+    __tablename__ = "chat_global"
+    id = Column(Integer, primary_key=True, index=True)
+    remetente = Column(String)
+    setor = Column(String)
+    texto = Column(Text)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+# Cria as tabelas automaticamente se não existirem
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI()
+
+# Configuração de CORS para permitir que o Front fale com o Back
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition"]
+)
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# Dependência para abrir/fechar o banco em cada requisição
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- ROTAS DE USUÁRIOS ---
+
+@app.post("/usuarios/")
+def criar_usuario(nome: str, setor: str, login: str, senha: str, db: Session = Depends(get_db)):
+    novo = UsuarioDB(nome=nome, setor=setor, login=login, senha=senha)
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo
+
+@app.get("/usuarios/")
+def listar_usuarios(db: Session = Depends(get_db)):
+    return db.query(UsuarioDB).all()
+
+@app.delete("/usuarios/{user_id}")
+def excluir_usuario(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(UsuarioDB).filter(UsuarioDB.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    db.delete(user)
+    db.commit()
+    return {"message": "Usuário removido com sucesso"}
+
+@app.post("/login/")
+def login(login_user: str, senha_user: str, db: Session = Depends(get_db)):
+    user = db.query(UsuarioDB).filter(UsuarioDB.login == login_user, UsuarioDB.senha == senha_user).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    return {"nome": user.nome, "setor": user.setor}
+
+# --- ROTAS DE TAREFAS ---
+
+@app.get("/tarefas/")
+def listar_tarefas(db: Session = Depends(get_db)):
+    return db.query(TarefaDB).all()
+
+@app.post("/tarefas/")
+async def criar_tarefa(
+    titulo: str = Form(...),
+    setor_destino: str = Form(...),
+    descricao: str = Form(...),
+    responsavel: str = Form(...),
+    setor_origem: str = Form(...),
+    link_flip: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    nova = TarefaDB(
+        titulo=titulo,
+        setor_destino=setor_destino,
+        descricao=descricao,
+        responsavel=responsavel,
+        setor_origem=setor_origem,
+        link_flip=link_flip
+    )
+    db.add(nova)
+    db.commit()
+    db.refresh(nova)
+    return nova
+
+@app.patch("/tarefas/{tarefa_id}")
+def atualizar_status(tarefa_id: int, novo_status: str, db: Session = Depends(get_db)):
+    t = db.query(TarefaDB).filter(TarefaDB.id == tarefa_id).first()
+    if t:
+        t.status = novo_status
+        db.commit()
+        return t
+    raise HTTPException(status_code=404)
+
+# --- ROTAS DE COMENTÁRIOS E CHAT ---
+
+@app.get("/tarefas/{tarefa_id}/comentarios/")
+def listar_coments(tarefa_id: int, db: Session = Depends(get_db)):
+    return db.query(ComentarioDB).filter(ComentarioDB.tarefa_id == tarefa_id).all()
+
+@app.post("/tarefas/{tarefa_id}/comentarios/")
+def add_comentario(
+    tarefa_id: int,
+    autor: str = Form(...),
+    texto: str = Form(...),
+    arquivo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    path = None
+    if arquivo and arquivo.filename:
+        path = f"uploads/{arquivo.filename}"
+        with open(path, "wb") as buffer:
+            shutil.copyfileobj(arquivo.file, buffer)
+    novo = ComentarioDB(tarefa_id=tarefa_id, autor=autor, texto=texto, arquivo=path)
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return novo
+
+@app.get("/chat/")
+def ler_chat(db: Session = Depends(get_db)):
+    return db.query(MensagemGlobalDB).all()
+
+@app.post("/chat/")
+def post_chat(remetente: str = Form(...), setor: str = Form(...), texto: str = Form(...), db: Session = Depends(get_db)):
+    m = MensagemGlobalDB(remetente=remetente, setor=setor, texto=texto)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return m
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

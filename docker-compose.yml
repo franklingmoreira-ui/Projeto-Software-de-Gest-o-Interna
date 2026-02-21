@@ -1,0 +1,39 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: erp-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: erp_banco
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  backend:
+    build: .
+    container_name: erp-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - db
+    restart: always
+    command: sh -c "pip install pymysql && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build: ./front
+    container_name: erp-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./front:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  mysql_data:
