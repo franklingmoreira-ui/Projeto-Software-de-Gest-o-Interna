@@ -19,6 +19,8 @@ Sistema robusto de gestão interna com metodologia Kanban, desenvolvido para oti
 - [x] Painel Kanban dinâmico para lançamento e gestão de demandas.
 - [x] Persistência de dados em ambiente relacional MySQL.
 - [x] Interface responsiva e moderna.
+- [x] Chat Interno em Tempo Real Comunicação direta entre funcionários para agilizar a resolução de tarefas.
+- [x] Persistência de dados em ambiente relacional MySQL.
 - [ ] Integração com AWS (Em progresso).
 
 ## 🚀 Como Executar o Projeto
