@@ -281,18 +281,69 @@ const App = () => {
 
       {/* CHAT LATERAL */}
       <div style={{ width: '300px', backgroundColor: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}><h4 style={{ margin: 0, color: 'var(--text-color)' }}><Users size={16}/> Chat</h4></div>
+        
+        {/* LISTA DE PRESENÇA (EQUIPE) */}
+        <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
+          <h4 style={{ margin: '0 0 15px 0', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Users size={18} color="var(--accent-color)"/> Equipe Flip
+          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+            {listaUsuarios.map(u => {
+              // LÓGICA DE STATUS:
+              // Se o usuário for você, está sempre online.
+              // Para os outros, a lógica final virá do banco (V2).
+              // Por enquanto, vamos deixar o seu verde e os outros cinza/vermelho para teste.
+              const isMe = u.nome === usuarioLogado.nome;
+              
+              return (
+                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: isMe ? '#00b894' : '#ff7675',
+                    boxShadow: isMe ? '0 0 5px #00b894' : '0 0 5px #ff7675'
+                  }}></div>
+                  <span style={{ color: 'var(--text-color)', fontWeight: isMe ? 'bold' : 'normal', opacity: isMe ? 1 : 0.7 }}>
+                    {u.nome} {isMe && "(Você)"}
+                  </span>
+                  <small style={{ fontSize: '9px', color: '#636e72', marginLeft: 'auto' }}>{u.setor}</small>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ÁREA DE MENSAGENS */}
         <div style={{ flex: 1, padding: '15px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {chatGlobal.map(m => (
-            <div key={m.id} style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '8px', borderRadius: '8px', alignSelf: m.remetente === usuarioLogado.nome ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
-              <small style={{ color: 'var(--accent-color)' }}>{m.remetente}</small><div style={{ fontSize: '12px', color: 'var(--text-color)' }}>{m.texto}</div>
+            <div key={m.id} style={{
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border-color)',
+              padding: '8px',
+              borderRadius: '8px',
+              alignSelf: m.remetente === usuarioLogado.nome ? 'flex-end' : 'flex-start',
+              maxWidth: '85%',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
+            }}>
+              <small style={{ color: 'var(--accent-color)', fontWeight: 'bold', display: 'block' }}>{m.remetente}</small>
+              <div style={{ fontSize: '12px', color: 'var(--text-color)', marginTop: '2px' }}>{m.texto}</div>
             </div>
           ))}
           <div ref={fimDoChatRef} />
         </div>
-        <form onSubmit={enviarMsgGlobal} style={{ padding: '15px', display: 'flex', gap: '5px' }}>
-          <input placeholder="Msg..." value={novaMsgGlobal} onChange={e => setNovaMsgGlobal(e.target.value)} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '8px', borderRadius: '5px' }} />
-          <button type="submit" style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', padding: '8px', borderRadius: '5px', cursor: 'pointer' }}><Send size={14}/></button>
+
+        {/* INPUT DE MENSAGEM */}
+        <form onSubmit={enviarMsgGlobal} style={{ padding: '15px', display: 'flex', gap: '5px', background: 'var(--card-bg)', borderTop: '1px solid var(--border-color)' }}>
+          <input
+            placeholder="Conversar com a equipe..."
+            value={novaMsgGlobal}
+            onChange={e => setNovaMsgGlobal(e.target.value)}
+            style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px', outline: 'none', fontSize: '13px' }}
+          />
+          <button type="submit" style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Send size={16}/>
+          </button>
         </form>
       </div>
 
