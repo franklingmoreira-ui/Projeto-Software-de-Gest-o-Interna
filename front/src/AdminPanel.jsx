@@ -39,10 +39,11 @@ const AdminPanel = () => {
         }
     };
 
+    // Estilo dos inputs agora com as variáveis dinâmicas!
     const inputStyle = {
-        background: '#0b0e14',
-        border: '1px solid #2d3436',
-        color: 'white',
+        background: 'var(--bg-color)',
+        border: '1px solid var(--border-color)',
+        color: 'var(--text-color)',
         padding: '10px',
         borderRadius: '8px',
         marginRight: '10px',
@@ -51,11 +52,12 @@ const AdminPanel = () => {
     };
 
     return (
-        <div style={{ padding: '20px', color: 'white' }}>
+        <div style={{ padding: '20px', color: 'var(--text-color)' }}>
             <h2 style={{ marginBottom: '20px' }}>🛠️ Gestão de Equipe (Admin)</h2>
             
-            <form onSubmit={handleCreate} style={{ background: '#131720', padding: '25px', borderRadius: '15px', border: '1px solid #2d3436', marginBottom: '30px' }}>
-                <h3 style={{ marginBottom: '15px', color: '#00d2ff' }}>Cadastrar Novo Membro</h3>
+            {/* Fundo do Formulário */}
+            <form onSubmit={handleCreate} style={{ background: 'var(--card-bg)', padding: '25px', borderRadius: '15px', border: '1px solid var(--border-color)', marginBottom: '30px' }}>
+                <h3 style={{ marginBottom: '15px', color: 'var(--accent-color)' }}>Cadastrar Novo Membro</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
                     <input placeholder="Nome Completo" value={novoUser.nome} onChange={e => setNovoUser({...novoUser, nome: e.target.value})} style={inputStyle} required />
                     <input placeholder="Login" value={novoUser.login} onChange={e => setNovoUser({...novoUser, login: e.target.value})} style={inputStyle} required />
@@ -69,16 +71,17 @@ const AdminPanel = () => {
                         <option value="Admin">Admin</option>
                     </select>
                     
-                    <button type="submit" style={{ background: '#00b894', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px' }}>
+                    <button type="submit" style={{ background: 'var(--accent-color)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '10px' }}>
                         Criar Acesso
                     </button>
                 </div>
             </form>
 
-            <div style={{ background: '#131720', borderRadius: '15px', border: '1px solid #2d3436', overflow: 'hidden' }}>
+            {/* Fundo da Tabela */}
+            <div style={{ background: 'var(--card-bg)', borderRadius: '15px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                     <thead>
-                        <tr style={{ background: '#1c222d', color: '#00d2ff' }}>
+                        <tr style={{ background: 'var(--header-bg)', color: 'var(--accent-color)' }}>
                             <th style={{ padding: '15px' }}>Nome</th>
                             <th style={{ padding: '15px' }}>Setor</th>
                             <th style={{ padding: '15px' }}>Login</th>
@@ -87,16 +90,16 @@ const AdminPanel = () => {
                     </thead>
                     <tbody>
                         {usuarios.map(u => (
-                            <tr key={u.id} style={{ borderBottom: '1px solid #2d3436' }}>
-                                <td style={{ padding: '15px' }}>{u.nome}</td>
+                            <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '15px', color: 'var(--text-color)' }}>{u.nome}</td>
                                 <td style={{ padding: '15px' }}>
-                                    <span style={{ background: 'rgba(0, 210, 255, 0.1)', color: '#00d2ff', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                                    <span style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--accent-color)', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>
                                         {u.setor.toUpperCase()}
                                     </span>
                                 </td>
-                                <td style={{ padding: '15px' }}>{u.login}</td>
+                                <td style={{ padding: '15px', color: 'var(--text-color)' }}>{u.login}</td>
                                 <td style={{ padding: '15px' }}>
-                                    <button onClick={() => handleDelete(u.id)} style={{ background: 'rgba(231, 76, 60, 0.2)', border: '1px solid #e74c3c', color: '#e74c3c', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer' }}>Excluir</button>
+                                    <button onClick={() => handleDelete(u.id)} style={{ background: 'transparent', border: '1px solid #e74c3c', color: '#e74c3c', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Excluir</button>
                                 </td>
                             </tr>
                         ))}

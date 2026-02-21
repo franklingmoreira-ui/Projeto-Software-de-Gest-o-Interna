@@ -1,68 +1,47 @@
+/* 1. MODO CLARO (Visual Clean e Premium) */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --bg-color: #f4f6f8; /* Fundo cinza bem gelo, descansa a vista */
+  --text-color: #2b3440; /* Texto escuro chique, não 100% preto */
+  --card-bg: #ffffff; /* Cards brancos dão profundidade */
+  --header-bg: #f8f9fa; /* Sidebar cinza super sutil */
+  --border-color: #dcdde1; /* Bordas suaves que não parecem arame */
+  --accent-color: #0984e3; /* Azul royal escuro super legível */
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+/* 2. MODO ESCURO (O seu visual Hacker Original) */
+body.dark-mode {
+  --bg-color: #0b0e14;
+  --text-color: #dfe6e9;
+  --card-bg: #131720;
+  --header-bg: #1c222d;
+  --border-color: #2d3436;
+  --accent-color: #00d2ff; /* O Ciano Neon volta aqui! */
 }
-a:hover {
-  color: #535bf2;
+
+/* 3. REGRAS GERAIS E CORREÇÕES */
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  padding: 0;
+  background-color: var(--bg-color) !important;
+  color: var(--text-color) !important;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+#root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  max-width: none;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Garante que os inputs não fiquem com bordas agressivas */
+input, select, textarea {
+  border-color: var(--border-color) !important;
+  color: var(--text-color) !important;
 }
