@@ -8,24 +8,23 @@ import uvicorn
 import datetime
 import os
 import shutil
-
 from pydantic import BaseModel
 
-# Esse modelo diz ao FastAPI para esperar um JSON tipo {"status": "doing"}
-class StatusUpdate(BaseModel):
-    status: str
+# --- 1. MODELOS DE ATUALIZAÇÃO (CORRIGIDO PARA ACEITAR A DESCRIÇÃO DA EMISSÃO) ---
+class TarefaUpdate(BaseModel):
+    status: Optional[str] = None
+    descricao: Optional[str] = None  # <--- Agora o backend aceita a descrição nova!
 
 # Garante que a pasta de uploads exista
 os.makedirs("uploads", exist_ok=True)
 
-# Configuração do Banco de Dados (Agora no MySQL!)
+# Configuração do Banco de Dados MySQL
 SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:admin@db:3306/erp_banco"
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # --- MODELOS DO BANCO DE DADOS ---
-
 class UsuarioDB(Base):
     __tablename__ = "usuarios"
     id = Column(Integer, primary_key=True, index=True)
@@ -88,7 +87,6 @@ def get_db():
         db.close()
 
 # --- ROTAS DE USUÁRIOS ---
-
 @app.post("/usuarios/")
 def criar_usuario(nome: str, setor: str, login: str, senha: str, db: Session = Depends(get_db)):
     novo = UsuarioDB(nome=nome, setor=setor, login=login, senha=senha)
@@ -118,7 +116,6 @@ def login(login_user: str, senha_user: str, db: Session = Depends(get_db)):
     return {"nome": user.nome, "setor": user.setor}
 
 # --- ROTAS DE TAREFAS ---
-
 @app.get("/tarefas/")
 def listar_tarefas(db: Session = Depends(get_db)):
     return db.query(TarefaDB).all()
@@ -146,18 +143,21 @@ async def criar_tarefa(
     db.refresh(nova)
     return nova
 
+# --- 🚀 ROTA DE ATUALIZAÇÃO CORRIGIDA ---
 @app.patch("/tarefas/{tarefa_id}")
-def atualizar_status(tarefa_id: int, data: StatusUpdate, db: Session = Depends(get_db)):
+def atualizar_tarefa(tarefa_id: int, data: TarefaUpdate, db: Session = Depends(get_db)):
     t = db.query(TarefaDB).filter(TarefaDB.id == tarefa_id).first()
     if t:
-        t.status = data.status  # Agora pega do corpo do JSON
+        if data.status is not None:
+            t.status = data.status
+        if data.descricao is not None:
+            t.descricao = data.descricao  # <--- Agora o Localizador do Emissor é salvo no banco!
         db.commit()
         db.refresh(t)
         return t
     raise HTTPException(status_code=404, detail="Tarefa não encontrada")
 
 # --- ROTAS DE COMENTÁRIOS E CHAT ---
-
 @app.get("/tarefas/{tarefa_id}/comentarios/")
 def listar_coments(tarefa_id: int, db: Session = Depends(get_db)):
     return db.query(ComentarioDB).filter(ComentarioDB.tarefa_id == tarefa_id).all()

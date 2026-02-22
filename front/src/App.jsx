@@ -29,9 +29,15 @@ const App = () => {
   const [arquivoComentario, setArquivoComentario] = useState(null);
   const [formLogin, setFormLogin] = useState({ login: '', senha: '' });
   const [novaMsgGlobal, setNovaMsgGlobal] = useState('');
+  
+  // ESTADO: CONTROLADOR DE DADOS DO EMISSOR
+  const [dadosEmissao, setDadosEmissao] = useState({ loc: '', cia: '', forn: '', data_ida: '', horario_ida: '', data_volta: '', horario_volta: '' });
+
   const [novo, setNovo] = useState({
     titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
-    tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', cia: '', forn: ''
+    tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', cia: '', forn: '',
+    tipo_voo: 'Somente Ida', origem_destino: '', origem_destino_volta: '', adultos: '1', criancas: '0', bebes: '0',
+    passageiros: [{ nome: '', cpf: '', bagagem: 'Não' }]
   });
 
   const setores = ["Financeiro", "Back-office", "SAC", "Emissão", "Admin"];
@@ -76,6 +82,39 @@ const App = () => {
       setComentarios([]);
       axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`)
         .then(res => setComentarios(res.data || []));
+
+      const d = tarefaAberta.descricao || "";
+      const getE = (k) => d.includes(`${k}:`) ? d.split(`${k}:`)[1].split('\n')[0].trim() : 'N/A';
+      
+      const rawData = getE("DATA");
+      const rawHorario = getE("HORARIO");
+      const isRound = getE("ORIGEM_DESTINO").includes('| VOLTA:');
+
+      let dIda = '', dVolta = '', hIda = '', hVolta = '';
+
+      if (isRound) {
+          if (rawData !== 'N/A' && rawData.includes('|')) {
+              dIda = rawData.split('|')[0].replace('IDA:', '').trim();
+              dVolta = rawData.split('|')[1].replace('VOLTA:', '').trim();
+          }
+          if (rawHorario !== 'N/A' && rawHorario.includes('|')) {
+              hIda = rawHorario.split('|')[0].replace('IDA:', '').trim();
+              hVolta = rawHorario.split('|')[1].replace('VOLTA:', '').trim();
+          }
+      } else {
+          dIda = rawData !== 'N/A' ? rawData.replace('IDA:', '').trim() : '';
+          hIda = rawHorario !== 'N/A' ? rawHorario.replace('IDA:', '').trim() : '';
+      }
+
+      setDadosEmissao({
+        loc: getE("LOC") !== 'N/A' ? getE("LOC") : '',
+        cia: getE("CIA") !== 'N/A' ? getE("CIA") : '',
+        forn: getE("FORN") !== 'N/A' ? getE("FORN") : '',
+        data_ida: dIda,
+        horario_ida: hIda,
+        data_volta: dVolta,
+        horario_volta: hVolta
+      });
     }
   }, [tarefaAberta]);
 
@@ -90,6 +129,58 @@ const App = () => {
     } catch (e) { alert("Erro ao mudar status!"); }
   };
 
+  // 🚀 ATUALIZAÇÃO: SALVA DADOS E GERA AVISO AUTOMÁTICO PARA A ORIGEM
+  const atualizarDadosEmissao = async (e) => {
+    e.preventDefault();
+    let novaDesc = tarefaAberta.descricao || "";
+    
+    const replaceOrAdd = (desc, key, val) => {
+        const regex = new RegExp(`${key}:.*`);
+        const newVal = val || 'N/A';
+        if (desc.match(regex)) return desc.replace(regex, `${key}:${newVal}`);
+        return desc + `\n${key}:${newVal}`;
+    };
+
+    const isRound = novaDesc.includes('ORIGEM_DESTINO:') && novaDesc.split('ORIGEM_DESTINO:')[1].split('\n')[0].includes('| VOLTA:');
+
+    let novaData = dadosEmissao.data_ida;
+    let novoHorario = dadosEmissao.horario_ida;
+
+    if (isRound) {
+        novaData = `IDA: ${dadosEmissao.data_ida || 'N/A'} | VOLTA: ${dadosEmissao.data_volta || 'N/A'}`;
+        novoHorario = `IDA: ${dadosEmissao.horario_ida || 'N/A'} | VOLTA: ${dadosEmissao.horario_volta || 'N/A'}`;
+    }
+
+    novaDesc = replaceOrAdd(novaDesc, 'LOC', dadosEmissao.loc);
+    novaDesc = replaceOrAdd(novaDesc, 'CIA', dadosEmissao.cia);
+    novaDesc = replaceOrAdd(novaDesc, 'FORN', dadosEmissao.forn);
+    novaDesc = replaceOrAdd(novaDesc, 'DATA', novaData);
+    novaDesc = replaceOrAdd(novaDesc, 'HORARIO', novoHorario);
+
+    try {
+        // 1. Salva os dados na caixa azul
+        await axios.patch(`${API_URL}/tarefas/${tarefaAberta.id}/`, { descricao: novaDesc });
+        
+        // 2. MÁGICA: Gera um comentário automático para notificar quem pediu a emissão!
+        const msgAviso = `✈️ EMISSÃO ATUALIZADA!\n\nLocalizador: ${dadosEmissao.loc || 'N/A'}\nCia Aérea: ${dadosEmissao.cia || 'N/A'}\n\nData: \n${novaData}\n\nHorário: \n${novoHorario}`;
+        
+        const fdComentario = new FormData();
+        fdComentario.append('autor', `[Aviso do Sistema]`);
+        fdComentario.append('texto', msgAviso);
+        await axios.post(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`, fdComentario);
+
+        setTarefaAberta({ ...tarefaAberta, descricao: novaDesc });
+        
+        // Atualiza a lista de comentários instantaneamente na tela
+        axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`).then(res => setComentarios(res.data || []));
+        carregarDados();
+        
+        alert("✈️ Passagem atualizada e solicitante notificado no Histórico!");
+    } catch (err) {
+        alert("⛔ Erro de servidor. Verifique o backend.");
+    }
+  };
+
   const criarDemanda = async (e) => {
     e.preventDefault();
     const fd = new FormData();
@@ -98,8 +189,27 @@ const App = () => {
     let tit = novo.titulo;
     if (novo.setor === 'Financeiro' && novo.tipo_financeiro) tit = `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}`;
     if (novo.setor === 'Back-office' && tipoFinalBack) tit = `[${tipoFinalBack.toUpperCase()}] ${novo.titulo}`;
+    if (novo.setor === 'Emissão') tit = `[EMISSÃO] ${novo.titulo}`;
 
-    const descFull = `PRAZO:${novo.prazo}h\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
+    let paxListStr = '';
+    let trechoFinal = novo.origem_destino;
+    let dataFinal = novo.data || 'N/A';
+
+    if (novo.setor === 'Emissão') {
+        const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
+        const paxList = (novo.passageiros || []).slice(0, totalPax);
+        paxListStr = paxList.map(p => `${p.nome || 'N/A'}::${p.cpf || 'N/A'}::${p.bagagem || 'Não'}`).join('||');
+        
+        trechoFinal = novo.tipo_voo === 'Ida e Volta' 
+            ? `IDA: ${novo.origem_destino} | VOLTA: ${novo.origem_destino_volta}` 
+            : novo.origem_destino;
+            
+        if (novo.tipo_voo === 'Ida e Volta') {
+            dataFinal = `IDA: ${novo.data || 'N/A'} | VOLTA: ${novo.data_volta || 'N/A'}`;
+        }
+    }
+
+    const descFull = `PRAZO:${novo.prazo}h\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${dataFinal}\nHORARIO:N/A\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\nORIGEM_DESTINO:${trechoFinal || 'N/A'}\nPAX:${novo.adultos} Adulto, ${novo.criancas} Criança, ${novo.bebes} Bebê\nPAX_LIST:${paxListStr}\n\nINFO:${novo.desc}`;
     
     fd.append('titulo', tit);
     fd.append('setor_destino', novo.setor);
@@ -108,7 +218,7 @@ const App = () => {
     fd.append('setor_origem', usuarioLogado.setor);
     
     await axios.post(`${API_URL}/tarefas/`, fd);
-    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', cia: '', forn: '' });
+    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', cia: '', forn: '', tipo_voo: 'Somente Ida', origem_destino: '', origem_destino_volta: '', adultos: '1', criancas: '0', bebes: '0', passageiros: [{ nome: '', cpf: '', bagagem: 'Não' }] });
     carregarDados();
   };
 
@@ -206,17 +316,82 @@ const App = () => {
                 </div>
               )}
 
+              {/* MÓDULO EXCLUSIVO DE EMISSÃO COM SELETOR DE IDA E VOLTA */}
+              {novo.setor === 'Emissão' && (() => {
+                const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <select value={novo.tipo_voo} onChange={e => setNovo({...novo, tipo_voo: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #0984e3', color: 'var(--text-color)' }}>
+                      <option value="Somente Ida">✈️ Somente Ida</option>
+                      <option value="Ida e Volta">✈️ Ida e Volta</option>
+                    </select>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input placeholder={novo.tipo_voo === 'Ida e Volta' ? "Trecho IDA (ex: GRU - JFK)" : "Trecho (ex: GRU - JFK)"} value={novo.origem_destino} onChange={e => setNovo({...novo, origem_destino: e.target.value})} style={{ flex: 2, padding: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', color: 'var(--text-color)', borderRadius: '8px' }} required />
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', borderRadius: '8px', padding: '0 10px' }}>
+                          <span style={{ fontSize: '12px', opacity: 0.7, color: '#0984e3', whiteSpace: 'nowrap' }}>Data Ida:</span>
+                          <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} required />
+                      </div>
+                    </div>
+
+                    {novo.tipo_voo === 'Ida e Volta' && (
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <input placeholder="Trecho VOLTA (ex: JFK - GRU)" value={novo.origem_destino_volta} onChange={e => setNovo({...novo, origem_destino_volta: e.target.value})} style={{ flex: 2, padding: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', color: 'var(--text-color)', borderRadius: '8px' }} required />
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', borderRadius: '8px', padding: '0 10px' }}>
+                              <span style={{ fontSize: '12px', opacity: 0.7, color: '#0984e3', whiteSpace: 'nowrap' }}>Data Volta:</span>
+                              <input type="date" value={novo.data_volta} onChange={e => setNovo({...novo, data_volta: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} required />
+                          </div>
+                        </div>
+                    )}
+                    
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '5px' }}>
+                      <div style={{ flex: 1, display: 'flex', gap: '5px', alignItems: 'center', background: 'var(--bg-color)', border: '1px solid #0984e3', padding: '5px 10px', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '12px', opacity: 0.7 }}>Adultos:</span>
+                        <input type="number" min="0" value={novo.adultos} onChange={e => setNovo({...novo, adultos: e.target.value})} style={{ width: '40px', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', gap: '5px', alignItems: 'center', background: 'var(--bg-color)', border: '1px solid #0984e3', padding: '5px 10px', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '12px', opacity: 0.7 }}>Crianças:</span>
+                        <input type="number" min="0" value={novo.criancas} onChange={e => setNovo({...novo, criancas: e.target.value})} style={{ width: '40px', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                      </div>
+                      <div style={{ flex: 1, display: 'flex', gap: '5px', alignItems: 'center', background: 'var(--bg-color)', border: '1px solid #0984e3', padding: '5px 10px', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '12px', opacity: 0.7 }}>Bebês:</span>
+                        <input type="number" min="0" value={novo.bebes} onChange={e => setNovo({...novo, bebes: e.target.value})} style={{ width: '40px', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                      </div>
+                    </div>
+
+                    {Array.from({ length: totalPax }).map((_, index) => {
+                        const p = (novo.passageiros && novo.passageiros[index]) || { nome: '', cpf: '', bagagem: 'Não' };
+                        return (
+                            <div key={index} style={{ display: 'flex', gap: '10px', alignItems: 'center', background: 'rgba(9,132,227,0.05)', padding: '10px', borderRadius: '8px', border: '1px dashed #0984e3' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#0984e3', width: '20px' }}>{index + 1}.</span>
+                                <input placeholder="Nome do Passageiro" value={p.nome} onChange={e => { const newPax = [...(novo.passageiros || [])]; if(!newPax[index]) newPax[index] = {nome:'', cpf:'', bagagem:'Não'}; newPax[index].nome = e.target.value; setNovo({...novo, passageiros: newPax}); }} style={{ flex: 2, padding: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '6px' }} required />
+                                <input placeholder="CPF" value={p.cpf} onChange={e => { const newPax = [...(novo.passageiros || [])]; if(!newPax[index]) newPax[index] = {nome:'', cpf:'', bagagem:'Não'}; newPax[index].cpf = e.target.value; setNovo({...novo, passageiros: newPax}); }} style={{ flex: 1.5, padding: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '6px' }} required />
+                                <select value={p.bagagem} onChange={e => { const newPax = [...(novo.passageiros || [])]; if(!newPax[index]) newPax[index] = {nome:'', cpf:'', bagagem:'Não'}; newPax[index].bagagem = e.target.value; setNovo({...novo, passageiros: newPax}); }} style={{ flex: 1, padding: '8px', borderRadius: '6px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }}>
+                                    <option value="Não">Sem Bag</option>
+                                    <option value="Sim">Com Bag</option>
+                                </select>
+                            </div>
+                        );
+                    })}
+                  </div>
+                );
+              })()}
+
               <div style={{ display: 'flex', gap: '10px' }}>
-                <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                <input placeholder={novo.setor === 'Emissão' ? "LOC (Se houver)" : "LOC"} value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                <input placeholder="Cia Aérea" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                
+                {novo.setor !== 'Emissão' && (
+                    <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                )}
+                
                 <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <input placeholder="Link Flip" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 <input placeholder="Link Chat" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
               </div>
-              <textarea placeholder="Informações Extras / Demandas Novas..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px', height: '60px' }} />
+              <textarea placeholder={novo.setor === 'Emissão' ? "Detalhes da emissão ou observações..." : "Informações Extras / Demandas Novas..."} value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px', height: '60px' }} />
               <button type="submit" style={{ padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>LANÇAR NO KANBAN</button>
             </form>
 
@@ -299,9 +474,13 @@ const App = () => {
 
       {tarefaAberta && (() => {
         const d = tarefaAberta.descricao || "";
-        const get = (k) => d.includes(`${k}:`) ? d.split(`${k}:`)[1].split('\n')[0] : 'N/A';
+        const get = (k) => d.includes(`${k}:`) ? d.split(`${k}:`)[1].split('\n')[0].trim() : 'N/A';
         const flip = get("LINK_FLIP") !== 'N/A' ? get("LINK_FLIP") : tarefaAberta.link_flip;
         const chatL = get("LINK_CHAT") !== 'N/A' ? get("LINK_CHAT") : null;
+        
+        const paxListRaw = get("PAX_LIST");
+        const paxItems = paxListRaw !== 'N/A' && paxListRaw !== '' ? paxListRaw.split('||') : [];
+
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 }}>
             <div style={{ background: 'var(--card-bg)', width: '950px', height: '85vh', borderRadius: '25px', display: 'flex', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
@@ -310,35 +489,208 @@ const App = () => {
                   <h2 style={{ margin: 0 }}>{tarefaAberta.titulo}</h2>
                   <X onClick={() => setTarefaAberta(null)} cursor="pointer" />
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%' }}>Localizador</td><td style={{ padding: '12px' }}>{get("LOC")}</td></tr>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td>
-                      <td style={{ padding: '12px', textAlign: 'left' }}>{(() => {
-                          const dataVoo = get("DATA");
-                          if (!dataVoo || dataVoo === 'N/A' || dataVoo.trim() === '') return 'N/A';
-                          const cleanData = dataVoo.trim();
-                          if (cleanData.includes('-')) {
-                            const [ano, mes, dia] = cleanData.split('-');
-                            return `${dia.trim()}/${mes.trim()}/${ano.trim()}`;
-                          }
-                          return cleanData;
-                        })()}</td>
-                    </tr>
-                    <tr><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Fornecedor</td><td style={{ padding: '12px' }}>{get("FORN")}</td></tr>
-                  </tbody>
-                </table>
+                
+                {/* TABELA GENÉRICA: SÓ APARECE SE NÃO FOR EMISSÃO */}
+                {tarefaAberta.setor_destino !== 'Emissão' && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
+                      <tbody>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%' }}>Localizador</td><td style={{ padding: '12px' }}>{get("LOC")}</td></tr>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td>
+                          <td style={{ padding: '12px', textAlign: 'left' }}>{(() => {
+                              const dataVoo = get("DATA");
+                              if (!dataVoo || dataVoo === 'N/A' || dataVoo.trim() === '') return 'N/A';
+                              const formataD = (dStr) => { const cleanD = dStr.trim(); if (cleanD.includes('-')) { const [ano, mes, dia] = cleanD.split('-'); return `${dia.trim()}/${mes.trim()}/${ano.trim()}`; } return cleanD; };
+                              return formataD(dataVoo);
+                            })()}</td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Horário do Voo</td>
+                            <td style={{ padding: '12px' }}>{get("HORARIO") !== 'N/A' && get("HORARIO") !== '' ? get("HORARIO").replace('IDA:', '').trim() : <span style={{ opacity: 0.5 }}>Não informado</span>}</td>
+                        </tr>
+                        <tr><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Fornecedor</td><td style={{ padding: '12px' }}>{get("FORN")}</td></tr>
+                      </tbody>
+                    </table>
+                )}
+
+                {tarefaAberta.setor_destino === 'Financeiro' && (
+                  <div style={{ marginBottom: '15px', padding: '12px', border: '1px solid #00b894', borderRadius: '12px', background: 'rgba(0,184,148,0.05)', color: '#00b894', fontWeight: 'bold' }}>TIPO FINANCEIRO: {tarefaAberta.titulo.includes('[') ? tarefaAberta.titulo.split('[')[1].split(']')[0] : 'Reembolso'}</div>
+                )}
+                {tarefaAberta.setor_destino === 'Back-office' && (
+                  <div style={{ marginBottom: '15px', padding: '12px', border: '1px solid #6c5ce7', borderRadius: '12px', background: 'rgba(108,92,231,0.05)', color: '#6c5ce7', fontWeight: 'bold' }}>PROCESSO BACK-OFFICE: {tarefaAberta.titulo.includes('[') ? tarefaAberta.titulo.split('[')[1].split(']')[0] : 'Geral'}</div>
+                )}
+
+                {/* PAINEL DE EDIÇÃO EXCLUSIVO DO SETOR DE EMISSÃO COM GRID CORRIGIDO */}
+                {tarefaAberta.setor_destino === 'Emissão' && usuarioLogado.setor.toLowerCase() === 'emissão' && (
+                  <div style={{ marginBottom: '15px', padding: '15px', border: '1px dashed #00b894', borderRadius: '12px', background: 'rgba(0,184,148,0.05)' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#00b894' }}>✍️ PREENCHER DADOS DO VOO EMITIDO</div>
+                    <form onSubmit={atualizarDadosEmissao} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                        <input placeholder="Novo Localizador..." value={dadosEmissao.loc} onChange={e => setDadosEmissao({...dadosEmissao, loc: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)', outline: 'none' }} />
+                        <input placeholder="Cia Aérea..." value={dadosEmissao.cia} onChange={e => setDadosEmissao({...dadosEmissao, cia: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)', outline: 'none' }} />
+                        <input placeholder="Fornecedor..." value={dadosEmissao.forn} onChange={e => setDadosEmissao({...dadosEmissao, forn: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)', outline: 'none' }} />
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #00b894', borderRadius: '8px', padding: '0 10px' }}>
+                            <span style={{ fontSize: '12px', opacity: 0.8, color: '#00b894', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Data Ida:</span>
+                            <input type="date" value={dadosEmissao.data_ida} onChange={e => setDadosEmissao({...dadosEmissao, data_ida: e.target.value})} style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #00b894', borderRadius: '8px', padding: '0 10px' }}>
+                            <span style={{ fontSize: '12px', opacity: 0.8, color: '#00b894', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Horário Ida:</span>
+                            <input type="time" value={dadosEmissao.horario_ida} onChange={e => setDadosEmissao({...dadosEmissao, horario_ida: e.target.value})} style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                        </div>
+                      </div>
+
+                      {get("ORIGEM_DESTINO").includes('| VOLTA:') && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #00b894', borderRadius: '8px', padding: '0 10px' }}>
+                              <span style={{ fontSize: '12px', opacity: 0.8, color: '#00b894', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Data Volta:</span>
+                              <input type="date" value={dadosEmissao.data_volta} onChange={e => setDadosEmissao({...dadosEmissao, data_volta: e.target.value})} style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #00b894', borderRadius: '8px', padding: '0 10px' }}>
+                              <span style={{ fontSize: '12px', opacity: 0.8, color: '#00b894', whiteSpace: 'nowrap', fontWeight: 'bold' }}>Horário Volta:</span>
+                              <input type="time" value={dadosEmissao.horario_volta} onChange={e => setDadosEmissao({...dadosEmissao, horario_volta: e.target.value})} style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                          </div>
+                        </div>
+                      )}
+
+                      <button type="submit" style={{ padding: '10px', background: '#00b894', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '5px' }}>✓ SALVAR E ATUALIZAR CARD</button>
+                    </form>
+                  </div>
+                )}
+
+                {/* MODAL: CAIXA AZUL UNIFICADA COM ALINHAMENTO DE CARTÃO DE EMBARQUE */}
+                {tarefaAberta.setor_destino === 'Emissão' && (
+                  <div style={{ marginBottom: '15px', padding: '15px', border: '1px solid #0984e3', borderRadius: '12px', background: 'rgba(9,132,227,0.05)', color: '#0984e3' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '15px', fontSize: '14px' }}>✈️ DADOS DA NOVA EMISSÃO</div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '13px', marginBottom: '15px' }}>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>TRECHO:</strong>
+                            <span style={{ color: 'var(--text-color)' }}>
+                                {get("ORIGEM_DESTINO").includes('| VOLTA:') ? (
+                                    <>
+                                        {get("ORIGEM_DESTINO").split('|')[0].trim()} <br/>
+                                        {get("ORIGEM_DESTINO").split('|')[1].trim()}
+                                    </>
+                                ) : (
+                                    get("ORIGEM_DESTINO")
+                                )}
+                            </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>DATA DO VOO:</strong>
+                            <span style={{ color: 'var(--text-color)' }}>
+                                {(() => {
+                                  const dataVoo = get("DATA");
+                                  if (!dataVoo || dataVoo === 'N/A' || dataVoo.trim() === '') return <span style={{opacity: 0.5}}>Não informada</span>;
+                                  
+                                  const formataD = (dStr) => { 
+                                      if (!dStr || dStr === 'N/A') return 'N/A';
+                                      const match = dStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+                                      if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+                                      return dStr.replace('IDA:', '').replace('VOLTA:', '').trim(); 
+                                  };
+
+                                  if (dataVoo.includes('| VOLTA:')) {
+                                      const partes = dataVoo.split('|');
+                                      return (
+                                          <>
+                                              {formataD(partes[0].replace('IDA:', ''))} <br/>
+                                              {formataD(partes[1].replace('VOLTA:', ''))}
+                                          </>
+                                      );
+                                  }
+                                  return formataD(dataVoo);
+                                })()}
+                            </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>PASSAGEIROS:</strong>
+                            <span style={{ color: 'var(--text-color)' }}>
+                                {get("PAX").replace(/ADT/g, 'Adulto').replace(/CHD/g, 'Criança').replace(/INF/g, 'Bebê')}
+                            </span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>HORÁRIO:</strong>
+                            <span style={{ color: 'var(--text-color)' }}>
+                                {(() => {
+                                    const hVoo = get("HORARIO");
+                                    const isRound = get("ORIGEM_DESTINO").includes('| VOLTA:');
+                                    
+                                    if (isRound) {
+                                        let hIda = 'N/A', hVolta = 'N/A';
+                                        if (hVoo && hVoo !== 'N/A' && hVoo.includes('| VOLTA:')) {
+                                            const partes = hVoo.split('|');
+                                            hIda = partes[0].replace('IDA:', '').trim();
+                                            hVolta = partes[1].replace('VOLTA:', '').trim();
+                                        } else if (hVoo && hVoo !== 'N/A' && !hVoo.includes('| VOLTA:')) {
+                                            hIda = hVoo.replace('IDA:', '').trim(); 
+                                        }
+                                        return (
+                                            <>
+                                                {hIda === 'N/A' || hIda === '' ? <span style={{opacity: 0.5}}>--:--</span> : hIda} <br/>
+                                                {hVolta === 'N/A' || hVolta === '' ? <span style={{opacity: 0.5}}>--:--</span> : hVolta}
+                                            </>
+                                        );
+                                    } else {
+                                        if (!hVoo || hVoo === 'N/A' || hVoo.trim() === '') return <span style={{opacity: 0.5}}>Não informado</span>;
+                                        return hVoo.replace('IDA:', '').trim();
+                                    }
+                                })()}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px dashed rgba(9,132,227,0.3)', paddingTop: '15px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', fontSize: '13px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>LOCALIZADOR:</strong> 
+                            <span style={{ color: 'var(--text-color)', fontWeight: 'bold' }}>{get("LOC")}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>CIA AÉREA:</strong> 
+                            <span style={{ color: 'var(--text-color)' }}>{get("CIA")}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <strong style={{ fontSize: '11px', opacity: 0.8 }}>FORNECEDOR:</strong> 
+                            <span style={{ color: 'var(--text-color)' }}>{get("FORN")}</span>
+                        </div>
+                    </div>
+                    
+                    {paxItems.length > 0 && (
+                      <div style={{ marginTop: '20px', borderTop: '1px solid rgba(9,132,227,0.2)', paddingTop: '15px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                         <strong style={{ fontSize: '11px', opacity: 0.8 }}>LISTA DE PASSAGEIROS E DADOS:</strong>
+                         {paxItems.map((px, idx) => {
+                             const [pNome, pCpf, pBag] = px.split('::');
+                             return (
+                                 <div key={idx} style={{ display: 'flex', gap: '10px', fontSize: '12px', color: 'var(--text-color)', background: 'rgba(128,128,128,0.1)', padding: '8px 10px', borderRadius: '6px' }}>
+                                     <div style={{ flex: 2 }}><strong>NOME:</strong> {pNome}</div>
+                                     <div style={{ flex: 1.5 }}><strong>CPF:</strong> {pCpf}</div>
+                                     <div style={{ flex: 1 }}><strong>BAG:</strong> {pBag}</div>
+                                 </div>
+                             )
+                         })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                     <div style={{ flex: 1, padding: '12px', border: '1px solid var(--accent-color)', borderRadius: '12px', background: 'rgba(0,0,0,0.1)', fontSize: '12px' }}><strong>DE:</strong> {tarefaAberta.setor_origem?.toUpperCase()} ({tarefaAberta.responsavel})</div>
                     <div style={{ flex: 1, padding: '12px', border: '1px solid var(--accent-color)', borderRadius: '12px', background: 'rgba(0,0,0,0.1)', fontSize: '12px' }}><strong>PARA:</strong> {tarefaAberta.setor_destino?.toUpperCase()}</div>
                 </div>
-                <div style={{ padding: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(128,128,128,0.05)', minHeight: '100px', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
+                <div style={{ padding: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(128,128,128,0.05)', minHeight: '100px', fontSize: '15px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', flexShrink: 0 }}>
                   <small style={{ opacity: 0.5, display: 'block', marginBottom: '10px' }}>DETALHES DA DEMANDA / INFORMAÇÕES EXTRAS</small>
                   {d.includes("INFO:") ? d.split("INFO:")[1]?.trim() : d}
                 </div>
-                <div style={{ marginTop: 'auto', display: 'flex', gap: '10px', paddingTop: '20px' }}>
+                <div style={{ marginTop: 'auto', display: 'flex', gap: '10px', paddingTop: '20px', flexShrink: 0 }}>
                   {flip && flip !== 'N/A' && <a href={flip.startsWith('http') ? flip : `https://${flip}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#0984e3', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> FLIP MILHAS</a>}
                   {chatL && chatL !== 'N/A' && <a href={chatL.startsWith('http') ? chatL : `https://${chatL}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#6c5ce7', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> CHAT CLIENTE</a>}
                 </div>
