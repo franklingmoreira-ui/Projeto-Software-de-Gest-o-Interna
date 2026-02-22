@@ -36,9 +36,10 @@ const App = () => {
   // ESTADO: CONTROLADOR DE DADOS DO EMISSOR
   const [dadosEmissao, setDadosEmissao] = useState({ loc: '', cia: '', forn: '', data_ida: '', horario_ida: '', data_volta: '', horario_volta: '' });
 
+  // ESTADO 'NOVO': ADICIONADO HORARIO_IDA E HORARIO_VOLTA
   const [novo, setNovo] = useState({
     titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
-    tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', cia: '', forn: '',
+    tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', horario_ida: '', horario_volta: '', cia: '', forn: '',
     tipo_voo: 'Somente Ida', origem_destino: '', origem_destino_volta: '', adultos: '1', criancas: '0', bebes: '0',
     passageiros: [{ nome: '', cpf: '', bagagem: 'Não' }]
   });
@@ -196,6 +197,9 @@ const App = () => {
     let paxListStr = '';
     let trechoFinal = novo.origem_destino;
     let dataFinal = novo.data || 'N/A';
+    
+    // 🚀 LÓGICA DO HORÁRIO NO NOVO CARD
+    let horarioFinal = novo.horario_ida || 'N/A';
 
     if (novo.setor === 'Emissão') {
         const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
@@ -208,11 +212,11 @@ const App = () => {
             
         if (novo.tipo_voo === 'Ida e Volta') {
             dataFinal = `IDA: ${novo.data || 'N/A'} | VOLTA: ${novo.data_volta || 'N/A'}`;
+            horarioFinal = `IDA: ${novo.horario_ida || 'N/A'} | VOLTA: ${novo.horario_volta || 'N/A'}`;
         }
     }
 
-    // 🚀 O SEGREDO DO TIMER ESTÁ AQUI: Salvamos o CRIADO_EM sem afetar a estrutura visual
-    const descFull = `PRAZO:${novo.prazo}h\nCRIADO_EM:${new Date().toISOString()}\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${dataFinal}\nHORARIO:N/A\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\nORIGEM_DESTINO:${trechoFinal || 'N/A'}\nPAX:${novo.adultos} Adulto, ${novo.criancas} Criança, ${novo.bebes} Bebê\nPAX_LIST:${paxListStr}\n\nINFO:${novo.desc}`;
+    const descFull = `PRAZO:${novo.prazo}h\nCRIADO_EM:${new Date().toISOString()}\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${dataFinal}\nHORARIO:${horarioFinal}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\nORIGEM_DESTINO:${trechoFinal || 'N/A'}\nPAX:${novo.adultos} Adulto, ${novo.criancas} Criança, ${novo.bebes} Bebê\nPAX_LIST:${paxListStr}\n\nINFO:${novo.desc}`;
     
     fd.append('titulo', tit);
     fd.append('setor_destino', novo.setor);
@@ -221,7 +225,7 @@ const App = () => {
     fd.append('setor_origem', usuarioLogado.setor);
     
     await axios.post(`${API_URL}/tarefas/`, fd);
-    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', cia: '', forn: '', tipo_voo: 'Somente Ida', origem_destino: '', origem_destino_volta: '', adultos: '1', criancas: '0', bebes: '0', passageiros: [{ nome: '', cpf: '', bagagem: 'Não' }] });
+    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', horario_ida: '', horario_volta: '', cia: '', forn: '', tipo_voo: 'Somente Ida', origem_destino: '', origem_destino_volta: '', adultos: '1', criancas: '0', bebes: '0', passageiros: [{ nome: '', cpf: '', bagagem: 'Não' }] });
     carregarDados();
   };
 
@@ -326,6 +330,7 @@ const App = () => {
                 </div>
               )}
 
+              {/* 🚀 FORMULÁRIO DE CRIAÇÃO DO EMISSOR COM OS NOVOS CAMPOS DE HORÁRIO */}
               {novo.setor === 'Emissão' && (() => {
                 const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
                 return (
@@ -341,6 +346,10 @@ const App = () => {
                           <span style={{ fontSize: '12px', opacity: 0.7, color: '#0984e3', whiteSpace: 'nowrap' }}>Data Ida:</span>
                           <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} required />
                       </div>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', borderRadius: '8px', padding: '0 10px' }}>
+                          <span style={{ fontSize: '12px', opacity: 0.7, color: '#0984e3', whiteSpace: 'nowrap' }}>Horário Ida:</span>
+                          <input type="time" value={novo.horario_ida} onChange={e => setNovo({...novo, horario_ida: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
+                      </div>
                     </div>
 
                     {novo.tipo_voo === 'Ida e Volta' && (
@@ -349,6 +358,10 @@ const App = () => {
                           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', borderRadius: '8px', padding: '0 10px' }}>
                               <span style={{ fontSize: '12px', opacity: 0.7, color: '#0984e3', whiteSpace: 'nowrap' }}>Data Volta:</span>
                               <input type="date" value={novo.data_volta} onChange={e => setNovo({...novo, data_volta: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} required />
+                          </div>
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #0984e3', borderRadius: '8px', padding: '0 10px' }}>
+                              <span style={{ fontSize: '12px', opacity: 0.7, color: '#0984e3', whiteSpace: 'nowrap' }}>Horário Volta:</span>
+                              <input type="time" value={novo.horario_volta} onChange={e => setNovo({...novo, horario_volta: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', outline: 'none' }} />
                           </div>
                         </div>
                     )}
@@ -417,7 +430,6 @@ const App = () => {
                     const diasRest = dataLim !== 'N/A' && dataLim !== '' ? Math.ceil((new Date(dataLim) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                     const enviadaPorMim = t.setor_origem?.toLowerCase() === usuarioLogado.setor.toLowerCase();
                     
-                    // 🚀 LÓGICA DO RELÓGIO (TIMER) DO FINANCEIRO
                     let timerText = `⏳ PRAZO: ${prazoCard}`;
                     let colorTag = prazoCard.includes('24') ? '#e74c3c' : '#00b894';
 
@@ -430,7 +442,7 @@ const App = () => {
 
                             if (diff <= 0) {
                                 timerText = `🚨 ATRASADO (${horasPrazo}h)`;
-                                colorTag = '#e74c3c'; // Fica vermelho se atrasar
+                                colorTag = '#e74c3c';
                             } else {
                                 const hLeft = Math.floor(diff / (1000 * 60 * 60));
                                 const mLeft = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
@@ -448,14 +460,12 @@ const App = () => {
                         <p style={{ fontSize: '10px', opacity: 0.6 }}>Responsável: {t.responsavel}</p>
                         <p style={{ fontSize: '9px', opacity: 0.5 }}>Destino: {t.setor_destino}</p>
                         
-                        {/* EXIBE O TIMER DO FINANCEIRO */}
                         {t.setor_destino.toLowerCase() === 'financeiro' && prazoCard !== 'N/A' && (
                           <div style={{ fontSize: '10px', marginTop: '5px', padding: '4px', borderRadius: '4px', background: colorTag, color: '#fff', fontWeight: 'bold', display: 'inline-block' }}>
                             {timerText}
                           </div>
                         )}
 
-                        {/* EXIBE A DATA DO BACK-OFFICE */}
                         {t.setor_destino.toLowerCase() !== 'financeiro' && dataLim !== 'N/A' && dataLim !== '' && !isNaN(diasRest) && (
                           <div style={{ fontSize: '10px', marginTop: '5px', padding: '4px', borderRadius: '4px', background: diasRest < 0 ? '#ff7675' : '#6c5ce7', color: '#fff', fontWeight: 'bold', display: 'inline-block' }}>
                             LIMITE: {new Date(dataLim).toLocaleDateString('pt-BR')} {diasRest !== null && ` (${diasRest < 0 ? 'ATRASADO' : diasRest + ' dias'})`}
