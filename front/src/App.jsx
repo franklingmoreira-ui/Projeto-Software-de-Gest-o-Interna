@@ -30,6 +30,9 @@ const App = () => {
   const [formLogin, setFormLogin] = useState({ login: '', senha: '' });
   const [novaMsgGlobal, setNovaMsgGlobal] = useState('');
   
+  // ESTADO: CONTROLE DE TEMPO AO VIVO PARA O TIMER
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
   // ESTADO: CONTROLADOR DE DADOS DO EMISSOR
   const [dadosEmissao, setDadosEmissao] = useState({ loc: '', cia: '', forn: '', data_ida: '', horario_ida: '', data_volta: '', horario_volta: '' });
 
@@ -47,12 +50,18 @@ const App = () => {
   const API_URL = "http://localhost:8000";
   const fimDoChatRef = useRef(null);
 
-  // --- 2. LOGICA ---
+  // --- 2. LOGICA E EFEITOS ---
   useEffect(() => {
     if (darkMode) document.body.classList.add('dark-mode');
     else document.body.classList.remove('dark-mode');
     localStorage.setItem('theme', JSON.stringify(darkMode));
   }, [darkMode]);
+
+  // RELÓGIO DO TIMER (Atualiza a cada 1 minuto)
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const carregarDados = async () => {
     if (!usuarioLogado) return;
@@ -129,7 +138,6 @@ const App = () => {
     } catch (e) { alert("Erro ao mudar status!"); }
   };
 
-  // 🚀 ATUALIZAÇÃO: SALVA DADOS E GERA AVISO AUTOMÁTICO PARA A ORIGEM
   const atualizarDadosEmissao = async (e) => {
     e.preventDefault();
     let novaDesc = tarefaAberta.descricao || "";
@@ -158,23 +166,17 @@ const App = () => {
     novaDesc = replaceOrAdd(novaDesc, 'HORARIO', novoHorario);
 
     try {
-        // 1. Salva os dados na caixa azul
         await axios.patch(`${API_URL}/tarefas/${tarefaAberta.id}/`, { descricao: novaDesc });
         
-        // 2. MÁGICA: Gera um comentário automático para notificar quem pediu a emissão!
         const msgAviso = `✈️ EMISSÃO ATUALIZADA!\n\nLocalizador: ${dadosEmissao.loc || 'N/A'}\nCia Aérea: ${dadosEmissao.cia || 'N/A'}\n\nData: \n${novaData}\n\nHorário: \n${novoHorario}`;
-        
         const fdComentario = new FormData();
         fdComentario.append('autor', `[Aviso do Sistema]`);
         fdComentario.append('texto', msgAviso);
         await axios.post(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`, fdComentario);
 
         setTarefaAberta({ ...tarefaAberta, descricao: novaDesc });
-        
-        // Atualiza a lista de comentários instantaneamente na tela
         axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`).then(res => setComentarios(res.data || []));
         carregarDados();
-        
         alert("✈️ Passagem atualizada e solicitante notificado no Histórico!");
     } catch (err) {
         alert("⛔ Erro de servidor. Verifique o backend.");
@@ -209,7 +211,8 @@ const App = () => {
         }
     }
 
-    const descFull = `PRAZO:${novo.prazo}h\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${dataFinal}\nHORARIO:N/A\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\nORIGEM_DESTINO:${trechoFinal || 'N/A'}\nPAX:${novo.adultos} Adulto, ${novo.criancas} Criança, ${novo.bebes} Bebê\nPAX_LIST:${paxListStr}\n\nINFO:${novo.desc}`;
+    // 🚀 O SEGREDO DO TIMER ESTÁ AQUI: Salvamos o CRIADO_EM sem afetar a estrutura visual
+    const descFull = `PRAZO:${novo.prazo}h\nCRIADO_EM:${new Date().toISOString()}\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${dataFinal}\nHORARIO:N/A\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\nORIGEM_DESTINO:${trechoFinal || 'N/A'}\nPAX:${novo.adultos} Adulto, ${novo.criancas} Criança, ${novo.bebes} Bebê\nPAX_LIST:${paxListStr}\n\nINFO:${novo.desc}`;
     
     fd.append('titulo', tit);
     fd.append('setor_destino', novo.setor);
@@ -292,10 +295,17 @@ const App = () => {
               </div>
 
               {novo.setor === 'Financeiro' && (
-                <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
-                  <option value="">Tipo de Reembolso...</option>
-                  {tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
+                    <option value="">Tipo de Reembolso...</option>
+                    {tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <select value={novo.prazo} onChange={e => setNovo({...novo, prazo: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
+                    <option value="24">Prazo: 24 horas</option>
+                    <option value="48">Prazo: 48 horas</option>
+                    <option value="72">Prazo: 72 horas</option>
+                  </select>
+                </div>
               )}
 
               {novo.setor === 'Back-office' && (
@@ -316,7 +326,6 @@ const App = () => {
                 </div>
               )}
 
-              {/* MÓDULO EXCLUSIVO DE EMISSÃO COM SELETOR DE IDA E VOLTA */}
               {novo.setor === 'Emissão' && (() => {
                 const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
                 return (
@@ -401,9 +410,35 @@ const App = () => {
                   <h4 style={{ marginBottom: '15px', opacity: 0.6 }}>{status === 'todo' ? 'PENDENTE' : status === 'doing' ? 'VERIFICANDO' : 'FINALIZADO'}</h4>
                   {tarefasFiltradas.filter(t => t.status === status).map(t => {
                     const d = t.descricao || "";
-                    const dataLim = d.includes("DATA_LIMITE:") ? d.split("DATA_LIMITE:")[1].split('\n')[0] : 'N/A';
+                    
+                    const dataLim = d.includes("DATA_LIMITE:") ? d.split("DATA_LIMITE:")[1].split('\n')[0].trim() : 'N/A';
+                    const prazoCard = d.includes("PRAZO:") ? d.split("PRAZO:")[1].split('\n')[0].trim() : 'N/A';
+                    const criadoEm = d.includes("CRIADO_EM:") ? d.split("CRIADO_EM:")[1].split('\n')[0].trim() : null;
                     const diasRest = dataLim !== 'N/A' && dataLim !== '' ? Math.ceil((new Date(dataLim) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                     const enviadaPorMim = t.setor_origem?.toLowerCase() === usuarioLogado.setor.toLowerCase();
+                    
+                    // 🚀 LÓGICA DO RELÓGIO (TIMER) DO FINANCEIRO
+                    let timerText = `⏳ PRAZO: ${prazoCard}`;
+                    let colorTag = prazoCard.includes('24') ? '#e74c3c' : '#00b894';
+
+                    if (t.setor_destino.toLowerCase() === 'financeiro' && criadoEm && prazoCard !== 'N/A') {
+                        const horasPrazo = parseInt(prazoCard.replace(/\D/g, ''));
+                        if (!isNaN(horasPrazo)) {
+                            const dataCriacao = new Date(criadoEm).getTime();
+                            const dataFim = dataCriacao + (horasPrazo * 60 * 60 * 1000);
+                            const diff = dataFim - currentTime;
+
+                            if (diff <= 0) {
+                                timerText = `🚨 ATRASADO (${horasPrazo}h)`;
+                                colorTag = '#e74c3c'; // Fica vermelho se atrasar
+                            } else {
+                                const hLeft = Math.floor(diff / (1000 * 60 * 60));
+                                const mLeft = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                                timerText = `⏳ RESTA: ${hLeft}h ${mLeft}m (de ${horasPrazo}h)`;
+                            }
+                        }
+                    }
+
                     return (
                       <div key={t.id} onClick={() => setTarefaAberta(t)} style={{ background: 'var(--header-bg)', padding: '12px', borderRadius: '10px', marginBottom: '10px', borderLeft: '5px solid var(--accent-color)', cursor: 'pointer', opacity: enviadaPorMim && t.setor_destino.toLowerCase() !== usuarioLogado.setor.toLowerCase() ? 0.8 : 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -412,11 +447,21 @@ const App = () => {
                         </div>
                         <p style={{ fontSize: '10px', opacity: 0.6 }}>Responsável: {t.responsavel}</p>
                         <p style={{ fontSize: '9px', opacity: 0.5 }}>Destino: {t.setor_destino}</p>
-                        {dataLim !== 'N/A' && dataLim !== '' && (
-                          <div style={{ fontSize: '10px', marginTop: '5px', padding: '4px', borderRadius: '4px', background: diasRest < 0 ? '#ff7675' : '#6c5ce7', color: '#fff', fontWeight: 'bold' }}>
+                        
+                        {/* EXIBE O TIMER DO FINANCEIRO */}
+                        {t.setor_destino.toLowerCase() === 'financeiro' && prazoCard !== 'N/A' && (
+                          <div style={{ fontSize: '10px', marginTop: '5px', padding: '4px', borderRadius: '4px', background: colorTag, color: '#fff', fontWeight: 'bold', display: 'inline-block' }}>
+                            {timerText}
+                          </div>
+                        )}
+
+                        {/* EXIBE A DATA DO BACK-OFFICE */}
+                        {t.setor_destino.toLowerCase() !== 'financeiro' && dataLim !== 'N/A' && dataLim !== '' && !isNaN(diasRest) && (
+                          <div style={{ fontSize: '10px', marginTop: '5px', padding: '4px', borderRadius: '4px', background: diasRest < 0 ? '#ff7675' : '#6c5ce7', color: '#fff', fontWeight: 'bold', display: 'inline-block' }}>
                             LIMITE: {new Date(dataLim).toLocaleDateString('pt-BR')} {diasRest !== null && ` (${diasRest < 0 ? 'ATRASADO' : diasRest + ' dias'})`}
                           </div>
                         )}
+                        
                         {status !== 'done' && t.setor_destino.toLowerCase() === usuarioLogado.setor.toLowerCase() && (
                             <button onClick={e => mudarStatus(t.id, status === 'todo' ? 'doing' : 'done', e)} style={{ width: '100%', marginTop: '8px', background: '#00b894', color: '#fff', border: 'none', padding: '5px', borderRadius: '5px', fontSize: '10px' }}>AVANÇAR</button>
                         )}
@@ -490,7 +535,6 @@ const App = () => {
                   <X onClick={() => setTarefaAberta(null)} cursor="pointer" />
                 </div>
                 
-                {/* TABELA GENÉRICA: SÓ APARECE SE NÃO FOR EMISSÃO */}
                 {tarefaAberta.setor_destino !== 'Emissão' && (
                     <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
                       <tbody>
@@ -521,7 +565,6 @@ const App = () => {
                   <div style={{ marginBottom: '15px', padding: '12px', border: '1px solid #6c5ce7', borderRadius: '12px', background: 'rgba(108,92,231,0.05)', color: '#6c5ce7', fontWeight: 'bold' }}>PROCESSO BACK-OFFICE: {tarefaAberta.titulo.includes('[') ? tarefaAberta.titulo.split('[')[1].split(']')[0] : 'Geral'}</div>
                 )}
 
-                {/* PAINEL DE EDIÇÃO EXCLUSIVO DO SETOR DE EMISSÃO COM GRID CORRIGIDO */}
                 {tarefaAberta.setor_destino === 'Emissão' && usuarioLogado.setor.toLowerCase() === 'emissão' && (
                   <div style={{ marginBottom: '15px', padding: '15px', border: '1px dashed #00b894', borderRadius: '12px', background: 'rgba(0,184,148,0.05)' }}>
                     <div style={{ fontWeight: 'bold', marginBottom: '12px', fontSize: '13px', color: '#00b894' }}>✍️ PREENCHER DADOS DO VOO EMITIDO</div>
@@ -562,7 +605,6 @@ const App = () => {
                   </div>
                 )}
 
-                {/* MODAL: CAIXA AZUL UNIFICADA COM ALINHAMENTO DE CARTÃO DE EMBARQUE */}
                 {tarefaAberta.setor_destino === 'Emissão' && (
                   <div style={{ marginBottom: '15px', padding: '15px', border: '1px solid #0984e3', borderRadius: '12px', background: 'rgba(9,132,227,0.05)', color: '#0984e3' }}>
                     <div style={{ fontWeight: 'bold', marginBottom: '15px', fontSize: '14px' }}>✈️ DADOS DA NOVA EMISSÃO</div>
@@ -601,8 +643,8 @@ const App = () => {
                                       const partes = dataVoo.split('|');
                                       return (
                                           <>
-                                              {formataD(partes[0].replace('IDA:', ''))} <br/>
-                                              {formataD(partes[1].replace('VOLTA:', ''))}
+                                              IDA: {formataD(partes[0].replace('IDA:', ''))} <br/>
+                                              VOLTA: {formataD(partes[1].replace('VOLTA:', ''))}
                                           </>
                                       );
                                   }
@@ -636,8 +678,8 @@ const App = () => {
                                         }
                                         return (
                                             <>
-                                                {hIda === 'N/A' || hIda === '' ? <span style={{opacity: 0.5}}>--:--</span> : hIda} <br/>
-                                                {hVolta === 'N/A' || hVolta === '' ? <span style={{opacity: 0.5}}>--:--</span> : hVolta}
+                                                IDA: {hIda === 'N/A' || hIda === '' ? <span style={{opacity: 0.5}}>--:--</span> : hIda} <br/>
+                                                VOLTA: {hVolta === 'N/A' || hVolta === '' ? <span style={{opacity: 0.5}}>--:--</span> : hVolta}
                                             </>
                                         );
                                     } else {
