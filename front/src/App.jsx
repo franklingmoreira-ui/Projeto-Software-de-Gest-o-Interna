@@ -31,11 +31,13 @@ const App = () => {
   const [novaMsgGlobal, setNovaMsgGlobal] = useState('');
   const [novo, setNovo] = useState({
     titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
-    tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: ''
+    tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', cia: '', forn: ''
   });
 
   const setores = ["Financeiro", "Back-office", "SAC", "Emissão", "Admin"];
   const tiposFinanceiro = ["Reembolso Cliente (24 horas)", "Reembolso Padrão", "Estorno Carteira (Wallet)", "Estorno Conta Cliente (PIX)", "Reembolso de Taxas"];
+  const tiposBackOffice = ["Recuperar Taxa No Show", "Correção de Nome", "Laudo Médico", "Atestado de Óbito", "Remarcação", "Outros (Digitar novo tipo...)"];
+
   const API_URL = "http://localhost:8000";
   const fimDoChatRef = useRef(null);
 
@@ -69,10 +71,9 @@ const App = () => {
     }
   }, [usuarioLogado]);
 
-  // CORREÇÃO DO CHAT INDIVIDUAL
   useEffect(() => {
     if (tarefaAberta) {
-      setComentarios([]); 
+      setComentarios([]);
       axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`)
         .then(res => setComentarios(res.data || []));
     }
@@ -92,8 +93,13 @@ const App = () => {
   const criarDemanda = async (e) => {
     e.preventDefault();
     const fd = new FormData();
-    const tit = novo.setor === 'Financeiro' && novo.tipo_financeiro ? `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}` : novo.titulo;
-    const descFull = `PRAZO:${novo.prazo}h\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
+    let tipoFinalBack = novo.tipo_backoffice === "Outros (Digitar novo tipo...)" ? novo.outro_tipo_back : novo.tipo_backoffice;
+
+    let tit = novo.titulo;
+    if (novo.setor === 'Financeiro' && novo.tipo_financeiro) tit = `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}`;
+    if (novo.setor === 'Back-office' && tipoFinalBack) tit = `[${tipoFinalBack.toUpperCase()}] ${novo.titulo}`;
+
+    const descFull = `PRAZO:${novo.prazo}h\nDATA_LIMITE:${novo.data_limite || 'N/A'}\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
     
     fd.append('titulo', tit);
     fd.append('setor_destino', novo.setor);
@@ -102,7 +108,7 @@ const App = () => {
     fd.append('setor_origem', usuarioLogado.setor);
     
     await axios.post(`${API_URL}/tarefas/`, fd);
-    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: '' });
+    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', cia: '', forn: '' });
     carregarDados();
   };
 
@@ -124,14 +130,16 @@ const App = () => {
   const tarefasFiltradas = tarefas.filter(t => {
     if (!usuarioLogado) return false;
     const setorUser = usuarioLogado.setor.toLowerCase();
-    const passaSeguranca = setorUser === 'admin' ? (setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo) : (t.setor_destino === usuarioLogado.setor);
+    const souDestino = t.setor_destino.toLowerCase() === setorUser;
+    const souOrigem = t.setor_origem && t.setor_origem.toLowerCase() === setorUser;
+    const passaSeguranca = setorUser === 'admin' ? (setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo) : (souDestino || souOrigem);
     return passaSeguranca && (buscarTexto(t.titulo) || buscarTexto(t.descricao));
   });
 
   if (!usuarioLogado) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'var(--bg-color)' }}>
-        <form onSubmit={async (e) => { e.preventDefault(); try { const r = await axios.post(`${API_URL}/login/?login_user=${formLogin.login}&senha_user=${formLogin.senha}`); setUsuarioLogado(r.data); } catch { alert("Login Inválido!"); } }} style={{ background: 'var(--card-bg)', padding: '50px', borderRadius: '24px', border: '1px solid var(--border-color)', width: '380px' }}>
+        <form onSubmit={async (e) => { e.preventDefault(); try { const r = await axios.post(`${API_URL}/login/?login_user=${formLogin.login}&senha_user=${formLogin.senha}`); setUsuarioLogado(r.data); } catch { alert("Erro!"); } }} style={{ background: 'var(--card-bg)', padding: '50px', borderRadius: '24px', border: '1px solid var(--border-color)', width: '380px' }}>
           <div style={{ textAlign: 'center', marginBottom: '30px' }}><Lock color="var(--accent-color)" size={40} /><h2>Orbit ERP</h2></div>
           <input placeholder="Login" value={formLogin.login} onChange={e => setFormLogin({...formLogin, login: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
           <input type="password" placeholder="Senha" value={formLogin.senha} onChange={e => setFormLogin({...formLogin, senha: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
@@ -144,7 +152,6 @@ const App = () => {
   return (
     <div style={{ display: 'flex', backgroundColor: 'var(--bg-color)', height: '100vh', width: '100vw', color: 'var(--text-color)', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       
-      {/* SIDEBAR */}
       <div style={{ width: '260px', backgroundColor: 'var(--header-bg)', borderRight: '1px solid var(--border-color)', padding: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <h2 style={{ color: 'var(--accent-color)' }}>Orbit ERP</h2>
         <button onClick={() => setDarkMode(!darkMode)} style={{ padding: '10px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-color)', cursor: 'pointer' }}>
@@ -155,7 +162,6 @@ const App = () => {
         <button onClick={() => { localStorage.removeItem('usuario_erp'); setUsuarioLogado(null); }} style={{ marginTop: 'auto', padding: '12px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '10px' }}>SAIR</button>
       </div>
 
-      {/* CONTEÚDO PRINCIPAL */}
       <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
           <h1>Painel de Demandas</h1>
@@ -167,46 +173,81 @@ const App = () => {
 
         {abaAtiva === 'kanban' ? (
           <>
-            {usuarioLogado?.setor?.toLowerCase() !== 'financeiro' && (
-              <form onSubmit={criarDemanda} style={{ background: 'var(--card-bg)', padding: '20px', borderRadius: '15px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', border: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input placeholder="Título" value={novo.titulo} onChange={e => setNovo({...novo, titulo: e.target.value})} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} required />
-                  <select value={novo.setor} onChange={e => setNovo({...novo, setor: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} required>
-                    <option value="">Destino...</option>{setores.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+            <form onSubmit={criarDemanda} style={{ background: 'var(--card-bg)', padding: '20px', borderRadius: '15px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input placeholder="Título da Demanda" value={novo.titulo} onChange={e => setNovo({...novo, titulo: e.target.value})} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} required />
+                <select value={novo.setor} onChange={e => setNovo({...novo, setor: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} required>
+                  <option value="">Destino...</option>{setores.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              {novo.setor === 'Financeiro' && (
+                <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
+                  <option value="">Tipo de Reembolso...</option>
+                  {tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+
+              {novo.setor === 'Back-office' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <select value={novo.tipo_backoffice} onChange={e => setNovo({...novo, tipo_backoffice: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #6c5ce7', color: 'var(--text-color)' }} required>
+                      <option value="">Tipo de Processo Back-office...</option>
+                      {tiposBackOffice.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-color)', border: '1px solid #6c5ce7', borderRadius: '8px', padding: '0 10px' }}>
+                        <span style={{ fontSize: '13px', whiteSpace: 'nowrap', opacity: 0.7 }}>Prazo Tarefa:</span>
+                        <input type="date" value={novo.data_limite} onChange={e => setNovo({...novo, data_limite: e.target.value})} style={{ flex: 1, background: 'transparent', border: 'none', color: 'var(--text-color)', padding: '10px 0', outline: 'none' }} required />
+                    </div>
+                  </div>
+                  {novo.tipo_backoffice === "Outros (Digitar novo tipo...)" && (
+                    <input placeholder="Descreva o tipo da nova demanda..." value={novo.outro_tipo_back} onChange={e => setNovo({...novo, outro_tipo_back: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #6c5ce7', color: 'var(--text-color)' }} required />
+                  )}
                 </div>
-                {novo.setor === 'Financeiro' && (
-                  <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
-                    <option value="">Tipo de Reembolso...</option>
-                    {tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                )}
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                  <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                  <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                  <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input placeholder="Link Flip" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                  <input placeholder="Link Chat" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
-                </div>
-                <textarea placeholder="Observações..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px', height: '60px' }} />
-                <button type="submit" style={{ padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>LANÇAR NO KANBAN</button>
-              </form>
-            )}
+              )}
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input placeholder="Link Flip" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                <input placeholder="Link Chat" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+              </div>
+              <textarea placeholder="Informações Extras / Demandas Novas..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px', height: '60px' }} />
+              <button type="submit" style={{ padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>LANÇAR NO KANBAN</button>
+            </form>
 
             <div style={{ display: 'flex', gap: '15px' }}>
               {['todo', 'doing', 'done'].map(status => (
                 <div key={status} style={{ flex: 1, background: 'var(--card-bg)', padding: '15px', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
                   <h4 style={{ marginBottom: '15px', opacity: 0.6 }}>{status === 'todo' ? 'PENDENTE' : status === 'doing' ? 'VERIFICANDO' : 'FINALIZADO'}</h4>
-                  {tarefasFiltradas.filter(t => t.status === status).map(t => (
-                    <div key={t.id} onClick={() => setTarefaAberta(t)} style={{ background: 'var(--header-bg)', padding: '12px', borderRadius: '10px', marginBottom: '10px', borderLeft: '5px solid var(--accent-color)', cursor: 'pointer' }}>
-                      <strong>{t.titulo}</strong>
-                      <p style={{ fontSize: '10px', opacity: 0.6 }}>De: {t.responsavel}</p>
-                      {status !== 'done' && <button onClick={e => mudarStatus(t.id, status === 'todo' ? 'doing' : 'done', e)} style={{ width: '100%', marginTop: '8px', background: '#00b894', color: '#fff', border: 'none', padding: '5px', borderRadius: '5px', fontSize: '10px' }}>AVANÇAR</button>}
-                    </div>
-                  ))}
+                  {tarefasFiltradas.filter(t => t.status === status).map(t => {
+                    const d = t.descricao || "";
+                    const dataLim = d.includes("DATA_LIMITE:") ? d.split("DATA_LIMITE:")[1].split('\n')[0] : 'N/A';
+                    const diasRest = dataLim !== 'N/A' && dataLim !== '' ? Math.ceil((new Date(dataLim) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                    const enviadaPorMim = t.setor_origem?.toLowerCase() === usuarioLogado.setor.toLowerCase();
+                    return (
+                      <div key={t.id} onClick={() => setTarefaAberta(t)} style={{ background: 'var(--header-bg)', padding: '12px', borderRadius: '10px', marginBottom: '10px', borderLeft: '5px solid var(--accent-color)', cursor: 'pointer', opacity: enviadaPorMim && t.setor_destino.toLowerCase() !== usuarioLogado.setor.toLowerCase() ? 0.8 : 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <strong>{t.titulo}</strong>
+                            {enviadaPorMim && <span style={{ fontSize: '9px', background: 'rgba(128,128,128,0.2)', padding: '2px 5px', borderRadius: '4px' }}>ENVIADA</span>}
+                        </div>
+                        <p style={{ fontSize: '10px', opacity: 0.6 }}>Responsável: {t.responsavel}</p>
+                        <p style={{ fontSize: '9px', opacity: 0.5 }}>Destino: {t.setor_destino}</p>
+                        {dataLim !== 'N/A' && dataLim !== '' && (
+                          <div style={{ fontSize: '10px', marginTop: '5px', padding: '4px', borderRadius: '4px', background: diasRest < 0 ? '#ff7675' : '#6c5ce7', color: '#fff', fontWeight: 'bold' }}>
+                            LIMITE: {new Date(dataLim).toLocaleDateString('pt-BR')} {diasRest !== null && ` (${diasRest < 0 ? 'ATRASADO' : diasRest + ' dias'})`}
+                          </div>
+                        )}
+                        {status !== 'done' && t.setor_destino.toLowerCase() === usuarioLogado.setor.toLowerCase() && (
+                            <button onClick={e => mudarStatus(t.id, status === 'todo' ? 'doing' : 'done', e)} style={{ width: '100%', marginTop: '8px', background: '#00b894', color: '#fff', border: 'none', padding: '5px', borderRadius: '5px', fontSize: '10px' }}>AVANÇAR</button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -214,7 +255,6 @@ const App = () => {
         ) : <AdminPanel/>}
       </div>
 
-      {/* CHAT GLOBAL E EQUIPE */}
       <div style={{ width: '320px', background: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
           <h4 style={{ margin: '0 0 15px 0' }}>Equipe Flip</h4>
@@ -239,55 +279,70 @@ const App = () => {
           ))}
           <div ref={fimDoChatRef}/>
         </div>
-        <form onSubmit={async (e) => { e.preventDefault(); if(!novaMsgGlobal.trim()) return; const fd = new FormData(); fd.append('remetente', usuarioLogado.nome); fd.append('texto', novaMsgGlobal); await axios.post(`${API_URL}/chat/`, fd); setNovaMsgGlobal(''); carregarDados(); }} style={{ padding: '15px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '5px' }}>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          if(!novaMsgGlobal.trim()) return;
+          try {
+            const fd = new FormData();
+            fd.append('remetente', usuarioLogado.nome);
+            fd.append('setor', usuarioLogado.setor);
+            fd.append('texto', novaMsgGlobal);
+            await axios.post(`${API_URL}/chat/`, fd);
+            setNovaMsgGlobal('');
+            carregarDados();
+          } catch (err) { console.error("Erro Chat:", err); }
+        }} style={{ padding: '15px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '5px' }}>
           <input placeholder="Chat..." value={novaMsgGlobal} onChange={e => setNovaMsgGlobal(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }} />
           <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px' }}><Send size={16}/></button>
         </form>
       </div>
 
-      {/* MODAL DETALHES FINAL */}
       {tarefaAberta && (() => {
         const d = tarefaAberta.descricao || "";
         const get = (k) => d.includes(`${k}:`) ? d.split(`${k}:`)[1].split('\n')[0] : 'N/A';
         const flip = get("LINK_FLIP") !== 'N/A' ? get("LINK_FLIP") : tarefaAberta.link_flip;
         const chatL = get("LINK_CHAT") !== 'N/A' ? get("LINK_CHAT") : null;
-
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 }}>
             <div style={{ background: 'var(--card-bg)', width: '950px', height: '85vh', borderRadius: '25px', display: 'flex', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-              
               <div style={{ flex: 1.2, padding: '35px', overflowY: 'auto', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                   <h2 style={{ margin: 0 }}>{tarefaAberta.titulo}</h2>
                   <X onClick={() => setTarefaAberta(null)} cursor="pointer" />
                 </div>
-                
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
                   <tbody>
                     <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%' }}>Localizador</td><td style={{ padding: '12px' }}>{get("LOC")}</td></tr>
                     <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td><td style={{ padding: '12px' }}>{get("DATA")}</td></tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td>
+                      <td style={{ padding: '12px', textAlign: 'left' }}>{(() => {
+                          const dataVoo = get("DATA");
+                          if (!dataVoo || dataVoo === 'N/A' || dataVoo.trim() === '') return 'N/A';
+                          const cleanData = dataVoo.trim();
+                          if (cleanData.includes('-')) {
+                            const [ano, mes, dia] = cleanData.split('-');
+                            return `${dia.trim()}/${mes.trim()}/${ano.trim()}`;
+                          }
+                          return cleanData;
+                        })()}</td>
+                    </tr>
                     <tr><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Fornecedor</td><td style={{ padding: '12px' }}>{get("FORN")}</td></tr>
                   </tbody>
                 </table>
-
-                {tarefaAberta.setor_destino === 'Financeiro' && (
-                  <div style={{ marginBottom: '15px', padding: '12px', border: '1px solid #00b894', borderRadius: '12px', background: 'rgba(0,184,148,0.05)', color: '#00b894', fontWeight: 'bold' }}>
-                    TIPO: {tarefaAberta.titulo.includes('[') ? tarefaAberta.titulo.split('[')[1].split(']')[0] : 'Reembolso'}
-                  </div>
-                )}
-
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                    <div style={{ flex: 1, padding: '12px', border: '1px solid var(--accent-color)', borderRadius: '12px', background: 'rgba(0,0,0,0.1)', fontSize: '12px' }}><strong>DE:</strong> {tarefaAberta.setor_origem?.toUpperCase()} ({tarefaAberta.responsavel})</div>
+                    <div style={{ flex: 1, padding: '12px', border: '1px solid var(--accent-color)', borderRadius: '12px', background: 'rgba(0,0,0,0.1)', fontSize: '12px' }}><strong>PARA:</strong> {tarefaAberta.setor_destino?.toUpperCase()}</div>
+                </div>
                 <div style={{ padding: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(128,128,128,0.05)', minHeight: '100px', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
-                  <small style={{ opacity: 0.5, display: 'block', marginBottom: '10px' }}>OBSERVAÇÕES ADICIONAIS</small>
+                  <small style={{ opacity: 0.5, display: 'block', marginBottom: '10px' }}>DETALHES DA DEMANDA / INFORMAÇÕES EXTRAS</small>
                   {d.includes("INFO:") ? d.split("INFO:")[1]?.trim() : d}
                 </div>
-
                 <div style={{ marginTop: 'auto', display: 'flex', gap: '10px', paddingTop: '20px' }}>
                   {flip && flip !== 'N/A' && <a href={flip.startsWith('http') ? flip : `https://${flip}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#0984e3', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> FLIP MILHAS</a>}
                   {chatL && chatL !== 'N/A' && <a href={chatL.startsWith('http') ? chatL : `https://${chatL}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#6c5ce7', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> CHAT CLIENTE</a>}
                 </div>
               </div>
-
               <div style={{ width: '400px', display: 'flex', flexDirection: 'column', background: 'var(--bg-color)' }}>
                 <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', fontWeight: 'bold' }}>Histórico</div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
@@ -300,10 +355,7 @@ const App = () => {
                   ))}
                 </div>
                 <form onSubmit={enviarComentario} style={{ padding: '20px', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    <Paperclip size={20} color={arquivoComentario ? "#00b894" : "gray"}/>
-                    <input type="file" onChange={e => setArquivoComentario(e.target.files[0])} style={{ display: 'none' }} />
-                  </label>
+                  <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Paperclip size={20} color={arquivoComentario ? "#00b894" : "gray"}/><input type="file" onChange={e => setArquivoComentario(e.target.files[0])} style={{ display: 'none' }} /></label>
                   <input placeholder="Responder..." value={novoComentario} onChange={e => setNovoComentario(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'var(--card-bg)', color: 'var(--text-color)', border: '1px solid var(--border-color)', outline: 'none' }} />
                   <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', display: 'flex', alignItems: 'center' }}><Send size={18}/></button>
                 </form>
