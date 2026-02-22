@@ -402,8 +402,8 @@ const App = () => {
                 <input placeholder={novo.setor === 'Emissão' ? "LOC (Se houver)" : "LOC"} value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 <input placeholder="Cia Aérea" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 
-                {/* Oculta Data do Voo para Emissão E Back-office */}
-                {novo.setor !== 'Emissão' && novo.setor !== 'Back-office' && (
+                {/* Oculta Data do Voo para Emissão, Back-office E Financeiro */}
+                {novo.setor !== 'Emissão' && novo.setor !== 'Back-office' && novo.setor !== 'Financeiro' && (
                     <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 )}
                 
@@ -552,8 +552,8 @@ const App = () => {
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%' }}>Localizador</td><td style={{ padding: '12px' }}>{get("LOC")}</td></tr>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
                         
-                        {/* OCULTA DATA E HORÁRIO SE O CARD FOR DO BACK-OFFICE */}
-                        {tarefaAberta.setor_destino !== 'Back-office' && (
+                        {/* OCULTA DATA E HORÁRIO SE O CARD FOR DO BACK-OFFICE OU FINANCEIRO */}
+                        {tarefaAberta.setor_destino !== 'Back-office' && tarefaAberta.setor_destino !== 'Financeiro' && (
                           <>
                             <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                               <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td>
