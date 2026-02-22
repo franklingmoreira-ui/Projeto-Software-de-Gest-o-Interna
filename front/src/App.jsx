@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Paperclip, Send, Download, Users, Lock, FileText, LayoutDashboard, Settings, Sun, Moon, Search, ExternalLink } from 'lucide-react';
+import { X, Paperclip, Send, Download, Lock, LayoutDashboard, Settings, Sun, Moon, Search, ExternalLink } from 'lucide-react';
 import AdminPanel from './AdminPanel.jsx';
 
 const App = () => {
@@ -69,10 +69,10 @@ const App = () => {
     }
   }, [usuarioLogado]);
 
-  // CORREÇÃO DO CHAT INDIVIDUAL: Limpa antes de carregar o próximo
+  // CORREÇÃO DO CHAT INDIVIDUAL
   useEffect(() => {
     if (tarefaAberta) {
-      setComentarios([]); // Limpa o chat do card anterior imediatamente
+      setComentarios([]); 
       axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`)
         .then(res => setComentarios(res.data || []));
     }
@@ -94,11 +94,13 @@ const App = () => {
     const fd = new FormData();
     const tit = novo.setor === 'Financeiro' && novo.tipo_financeiro ? `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}` : novo.titulo;
     const descFull = `PRAZO:${novo.prazo}h\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
+    
     fd.append('titulo', tit);
     fd.append('setor_destino', novo.setor);
     fd.append('descricao', descFull);
     fd.append('responsavel', usuarioLogado.nome);
     fd.append('setor_origem', usuarioLogado.setor);
+    
     await axios.post(`${API_URL}/tarefas/`, fd);
     setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: '' });
     carregarDados();
@@ -116,12 +118,14 @@ const App = () => {
     axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`).then(res => setComentarios(res.data || []));
   };
 
+  const baixarArquivo = (url) => window.open(`${API_URL}/${url}`, '_blank');
+  const buscarTexto = (txt) => txt ? txt.toLowerCase().includes(filtroBusca.toLowerCase()) : false;
+
   const tarefasFiltradas = tarefas.filter(t => {
     if (!usuarioLogado) return false;
-    const busca = filtroBusca.toLowerCase();
     const setorUser = usuarioLogado.setor.toLowerCase();
     const passaSeguranca = setorUser === 'admin' ? (setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo) : (t.setor_destino === usuarioLogado.setor);
-    return passaSeguranca && (t.titulo.toLowerCase().includes(busca) || t.descricao.toLowerCase().includes(busca));
+    return passaSeguranca && (buscarTexto(t.titulo) || buscarTexto(t.descricao));
   });
 
   if (!usuarioLogado) {
@@ -170,23 +174,27 @@ const App = () => {
                     <option value="">Destino...</option>{setores.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+
                 {novo.setor === 'Financeiro' && (
                   <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
                     <option value="">Selecione o Tipo de Reembolso...</option>
                     {tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 )}
+
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
                   <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
                   <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
-                  <input placeholder="Forn" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
+                  <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
                 </div>
+                
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <input placeholder="Link Flip" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
                   <input placeholder="Link Chat" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px' }} />
                 </div>
-                <textarea placeholder="Obs..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px', height: '60px' }} />
+
+                <textarea placeholder="Observações..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', borderRadius: '8px', height: '60px' }} />
                 <button type="submit" style={{ padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>LANÇAR NO KANBAN</button>
               </form>
             )}
@@ -212,26 +220,19 @@ const App = () => {
       {/* CHAT GLOBAL E EQUIPE */}
       <div style={{ width: '320px', background: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
-  <h4 style={{ margin: '0 0 15px 0' }}>Equipe Flip</h4>
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-    {listaUsuarios.map(u => {
-      // LOGICA DE STATUS: Só fica verde se for você ou se não for um dos nomes de teste offline
-      const isOnline = u.nome === usuarioLogado.nome || (u.nome.toLowerCase() !== 'renata' && u.nome.toLowerCase() !== 'diego');
-      
-      return (
-        <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-          <div style={{
-            width: '8px',
-            height: '8px',
-            borderRadius: '50%',
-            background: isOnline ? '#00b894' : '#ff7675' // Verde para online, Vermelho para offline
-          }}></div>
-          <span style={{ opacity: isOnline ? 1 : 0.6 }}>{u.nome}</span>
+          <h4 style={{ margin: '0 0 15px 0' }}>Equipe Flip</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {listaUsuarios.map(u => {
+              const isOnline = u.nome === usuarioLogado.nome || (u.nome.toLowerCase() !== 'renata' && u.nome.toLowerCase() !== 'diego');
+              return (
+                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#00b894' : '#ff7675' }}></div>
+                  <span style={{ opacity: isOnline ? 1 : 0.6 }}>{u.nome}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      );
-    })}
-  </div>
-</div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
           {chatGlobal.map(m => (
             <div key={m.id} style={{ background: 'var(--card-bg)', padding: '10px', borderRadius: '10px', marginBottom: '10px' }}>
