@@ -134,7 +134,16 @@ const App = () => {
     });
     carregarDados();
   };
-
+const mudarStatus = async (id, novoStatus, e) => {
+    e.stopPropagation(); // Evita que o modal de detalhes abra ao clicar no botão
+    try {
+      await axios.patch(`${API_URL}/tarefas/${id}/`, { status: novoStatus });
+      carregarDados(); // Atualiza o Kanban imediatamente
+    } catch (e) {
+      console.error("Erro ao avançar tarefa:", e);
+      alert("Erro ao mudar status no banco!");
+    }
+  };
   const enviarMsgGlobal = async (e) => {
     e.preventDefault();
     if (!novaMsgGlobal.trim()) return;

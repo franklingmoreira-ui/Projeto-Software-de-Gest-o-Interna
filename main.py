@@ -9,6 +9,12 @@ import datetime
 import os
 import shutil
 
+from pydantic import BaseModel
+
+# Esse modelo diz ao FastAPI para esperar um JSON tipo {"status": "doing"}
+class StatusUpdate(BaseModel):
+    status: str
+
 # Garante que a pasta de uploads exista
 os.makedirs("uploads", exist_ok=True)
 
@@ -141,13 +147,14 @@ async def criar_tarefa(
     return nova
 
 @app.patch("/tarefas/{tarefa_id}")
-def atualizar_status(tarefa_id: int, novo_status: str, db: Session = Depends(get_db)):
+def atualizar_status(tarefa_id: int, data: StatusUpdate, db: Session = Depends(get_db)):
     t = db.query(TarefaDB).filter(TarefaDB.id == tarefa_id).first()
     if t:
-        t.status = novo_status
+        t.status = data.status  # Agora pega do corpo do JSON
         db.commit()
+        db.refresh(t)
         return t
-    raise HTTPException(status_code=404)
+    raise HTTPException(status_code=404, detail="Tarefa não encontrada")
 
 # --- ROTAS DE COMENTÁRIOS E CHAT ---
 
