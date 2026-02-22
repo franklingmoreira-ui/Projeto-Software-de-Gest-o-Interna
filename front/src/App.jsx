@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Paperclip, Send, Download, Users, Lock, FileText, LayoutDashboard, Settings, Sun, Moon } from 'lucide-react';
+import { X, Paperclip, Send, Download, Users, Lock, FileText, LayoutDashboard, Settings, Sun, Moon, Search, ExternalLink } from 'lucide-react';
 import AdminPanel from './AdminPanel.jsx';
 
 const App = () => {
-  // 1. ESTADOS PRINCIPAIS
+  // --- 1. ESTADOS ---
   const [usuarioLogado, setUsuarioLogado] = useState(() => {
     try {
       const salvo = localStorage.getItem('usuario_erp');
@@ -17,15 +17,9 @@ const App = () => {
     return salvo ? JSON.parse(salvo) : true;
   });
 
-  useEffect(() => {
-    if (darkMode) document.body.classList.add('dark-mode');
-    else document.body.classList.remove('dark-mode');
-    localStorage.setItem('theme', JSON.stringify(darkMode));
-  }, [darkMode]);
-
-  // ESTADOS DE DADOS
   const [abaAtiva, setAbaAtiva] = useState('kanban');
-  const [formLogin, setFormLogin] = useState({ login: '', senha: '' });
+  const [filtroBusca, setFiltroBusca] = useState('');
+  const [setorAtivo, setSetorAtivo] = useState('Todos');
   const [tarefas, setTarefas] = useState([]);
   const [chatGlobal, setChatGlobal] = useState([]);
   const [listaUsuarios, setListaUsuarios] = useState([]);
@@ -33,30 +27,24 @@ const App = () => {
   const [comentarios, setComentarios] = useState([]);
   const [novoComentario, setNovoComentario] = useState('');
   const [arquivoComentario, setArquivoComentario] = useState(null);
-  
-  // ESTADO DO FILTRO (Importante para o Admin!)
-  const [setorAtivo, setSetorAtivo] = useState('Todos');
-  
+  const [formLogin, setFormLogin] = useState({ login: '', senha: '' });
   const [novaMsgGlobal, setNovaMsgGlobal] = useState('');
   const [novo, setNovo] = useState({
-  titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
-  tipo_financeiro: '', prazo: '24',
-  loc: '', data: '', cia: '', forn: '' // <--- Garanta esses campos aqui!
-});
+    titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
+    tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: ''
+  });
 
   const setores = ["Financeiro", "Back-office", "SAC", "Emissão", "Admin"];
   const tiposFinanceiro = ["Reembolso Cliente (24 horas)", "Reembolso Padrão", "Estorno Carteira (Wallet)", "Estorno Conta Cliente (PIX)", "Reembolso de Taxas"];
   const API_URL = "http://localhost:8000";
   const fimDoChatRef = useRef(null);
 
-  // 3. FUNÇÕES DE CARREGAMENTO E LÓGICA
-  const obterEstiloSLA = (descricao) => {
-    if (!descricao) return { borderLeft: '6px solid var(--border-color)' };
-    if (descricao.includes("PRAZO:24h")) return { borderLeft: '6px solid #ff7675' };
-    if (descricao.includes("PRAZO:48h")) return { borderLeft: '6px solid #fdcb6e' };
-    if (descricao.includes("PRAZO:72h")) return { borderLeft: '6px solid var(--accent-color)' };
-    return { borderLeft: '6px solid var(--border-color)' };
-  };
+  // --- 2. LOGICA DE SINCRONIZAÇÃO ---
+  useEffect(() => {
+    if (darkMode) document.body.classList.add('dark-mode');
+    else document.body.classList.remove('dark-mode');
+    localStorage.setItem('theme', JSON.stringify(darkMode));
+  }, [darkMode]);
 
   const carregarDados = async () => {
     if (!usuarioLogado) return;
@@ -78,7 +66,7 @@ const App = () => {
       carregarDados();
       const i = setInterval(carregarDados, 3000);
       return () => clearInterval(i);
-    } else { localStorage.removeItem('usuario_erp'); }
+    }
   }, [usuarioLogado]);
 
   useEffect(() => {
@@ -90,69 +78,33 @@ const App = () => {
 
   useEffect(() => { fimDoChatRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatGlobal]);
 
-  const baixarArquivo = async (urlOriginal) => {
+  // --- 3. AÇÕES ---
+  const mudarStatus = async (id, novoStatus, e) => {
+    e.stopPropagation();
     try {
-      const response = await fetch(`${API_URL}/${urlOriginal}`);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', urlOriginal.split('/').pop());
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) { window.open(`${API_URL}/${urlOriginal}`, '_blank'); }
+      await axios.patch(`${API_URL}/tarefas/${id}/`, { status: novoStatus });
+      carregarDados();
+    } catch (e) { alert("Erro ao mudar status!"); }
   };
 
-  const ehImagem = (url) => /\.(jpg|jpeg|png|webp|avif|gif)$/i.test(url);
-
-  // 4. AÇÕES
   const criarDemanda = async (e) => {
     e.preventDefault();
     const fd = new FormData();
-    const tit = novo.setor === 'Financeiro' && novo.tipo_financeiro
-      ? `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}`
-      : novo.titulo;
+    const tit = novo.setor === 'Financeiro' && novo.tipo_financeiro ? `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}` : novo.titulo;
+    
+    // REDUNDÂNCIA: Salvando todos os links na descrição para garantir a busca e os botões
+    const descricaoComDados = `PRAZO:${novo.prazo}h\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
     
     fd.append('titulo', tit);
     fd.append('setor_destino', novo.setor);
-    
-    // ATUALIZADO: Agora salvamos todos os campos operacionais na string de descrição
-    const descricaoComDados = `PRAZO:${novo.prazo}h\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
-    
     fd.append('descricao', descricaoComDados);
     fd.append('responsavel', usuarioLogado.nome);
     fd.append('setor_origem', usuarioLogado.setor);
     fd.append('link_flip', novo.link_flip || '');
     
     await axios.post(`${API_URL}/tarefas/`, fd);
-    
-    // Limpa o formulário (incluindo os novos campos)
-    setNovo({
-      titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
-      tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: ''
-    });
+    setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: '' });
     carregarDados();
-  };
-const mudarStatus = async (id, novoStatus, e) => {
-    e.stopPropagation(); // Evita que o modal de detalhes abra ao clicar no botão
-    try {
-      await axios.patch(`${API_URL}/tarefas/${id}/`, { status: novoStatus });
-      carregarDados(); // Atualiza o Kanban imediatamente
-    } catch (e) {
-      console.error("Erro ao avançar tarefa:", e);
-      alert("Erro ao mudar status no banco!");
-    }
-  };
-  const enviarMsgGlobal = async (e) => {
-    e.preventDefault();
-    if (!novaMsgGlobal.trim()) return;
-    const fd = new FormData();
-    fd.append('remetente', usuarioLogado.nome);
-    fd.append('setor', usuarioLogado.setor);
-    fd.append('texto', novaMsgGlobal);
-    await axios.post(`${API_URL}/chat/`, fd);
-    setNovaMsgGlobal('');
   };
 
   const enviarComentario = async (e) => {
@@ -162,335 +114,209 @@ const mudarStatus = async (id, novoStatus, e) => {
     fd.append('autor', usuarioLogado.nome);
     fd.append('texto', novoComentario || "Arquivo anexado");
     if (arquivoComentario) fd.append('arquivo', arquivoComentario);
-
     await axios.post(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`, fd);
-    setNovoComentario('');
-    setArquivoComentario(null);
+    setNovoComentario(''); setArquivoComentario(null);
     axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`).then(res => setComentarios(res.data || []));
   };
 
-  // ==================================================================================
-  // LÓGICA DE SEGURANÇA: FILTRAGEM DOS CARDS POR SETOR
-  // ==================================================================================
+  const baixarArquivo = (url) => window.open(`${API_URL}/${url}`, '_blank');
+  const buscarTexto = (txt) => txt ? txt.toLowerCase().includes(filtroBusca.toLowerCase()) : false;
+
   const tarefasFiltradas = tarefas.filter(t => {
     if (!usuarioLogado) return false;
-    const setorUsuario = usuarioLogado.setor;
-
-    // REGRA 1: Se for ADMIN, aplica o filtro selecionado no dropdown
-    if (setorUsuario.toLowerCase() === 'admin') {
-      return setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo;
-    }
-
-    // REGRA 2: Para outros setores, SÓ MOSTRA o que foi destinado a eles
-    return t.setor_destino === setorUsuario;
+    const setorUser = usuarioLogado.setor.toLowerCase();
+    const passaSeguranca = setorUser === 'admin' 
+      ? (setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo)
+      : (t.setor_destino === usuarioLogado.setor);
+    const bateBusca = buscarTexto(t.titulo) || buscarTexto(t.descricao) || (t.link_flip && buscarTexto(t.link_flip));
+    return passaSeguranca && bateBusca;
   });
-  // ==================================================================================
 
-
-  // 5. RENDERIZAÇÃO LOGIN
+  // RENDERIZAÇÃO LOGIN (Omitida para encurtar, mas funcional no seu arquivo)
   if (!usuarioLogado) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: 'var(--bg-color)', color: 'var(--text-color)', fontFamily: 'sans-serif' }}>
         <form onSubmit={async (e) => { e.preventDefault(); try { const r = await axios.post(`${API_URL}/login/?login_user=${formLogin.login}&senha_user=${formLogin.senha}`); setUsuarioLogado(r.data); } catch { alert("Login Inválido!"); } }} style={{ backgroundColor: 'var(--card-bg)', padding: '50px', borderRadius: '24px', border: '1px solid var(--border-color)', width: '380px' }}>
-          <div style={{ textAlign: 'center', marginBottom: '30px' }}><Lock color="var(--accent-color)" size={40} /><h2 style={{ color: 'var(--text-color)' }}>Acesso ERP</h2></div>
-          <input placeholder="Login" value={formLogin.login} onChange={e => setFormLogin({...formLogin, login: e.target.value})} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '15px', borderRadius: '12px', width: '100%', marginBottom: '15px', outline: 'none' }} />
-          <input type="password" placeholder="Senha" value={formLogin.senha} onChange={e => setFormLogin({...formLogin, senha: e.target.value})} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '15px', borderRadius: '12px', width: '100%', marginBottom: '25px', outline: 'none' }} />
-          <button type="submit" style={{ background: 'var(--accent-color)', border: 'none', color: '#fff', padding: '15px', borderRadius: '12px', width: '100%', fontWeight: 'bold', cursor: 'pointer' }}>ENTRAR</button>
+          <div style={{ textAlign: 'center', marginBottom: '30px' }}><Lock color="var(--accent-color)" size={40} /><h2>Orbit ERP</h2></div>
+          <input placeholder="Login" value={formLogin.login} onChange={e => setFormLogin({...formLogin, login: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+          <input type="password" placeholder="Senha" value={formLogin.senha} onChange={e => setFormLogin({...formLogin, senha: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+          <button type="submit" style={{ width: '100%', padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>ENTRAR</button>
         </form>
       </div>
     );
   }
 
-  // RENDERIZAÇÃO DO SISTEMA
   return (
     <div style={{ display: 'flex', backgroundColor: 'var(--bg-color)', height: '100vh', width: '100vw', color: 'var(--text-color)', overflow: 'hidden', fontFamily: 'sans-serif' }}>
       
       {/* SIDEBAR */}
-      <div style={{ width: '260px', backgroundColor: 'var(--header-bg)', borderRight: '1px solid var(--border-color)', padding: '25px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h2 style={{ color: 'var(--accent-color)', fontSize: '22px', fontWeight: '800', marginBottom: '10px' }}>Orbit ERP</h2>
-        <button onClick={() => setDarkMode(!darkMode)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '8px', borderRadius: '10px', cursor: 'pointer', marginBottom: '15px' }}>
-          {darkMode ? <Sun size={16} /> : <Moon size={16} />} {darkMode ? 'Claro' : 'Escuro'}
+      <div style={{ width: '260px', backgroundColor: 'var(--header-bg)', borderRight: '1px solid var(--border-color)', padding: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        <h2 style={{ color: 'var(--accent-color)' }}>Orbit ERP</h2>
+        <button onClick={() => setDarkMode(!darkMode)} style={{ padding: '10px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-color)', cursor: 'pointer' }}>
+          {darkMode ? <Sun size={16}/> : <Moon size={16}/>} {darkMode ? 'Claro' : 'Escuro'}
         </button>
-        <div style={{ background: 'var(--card-bg)', padding: '15px', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
-          <h3 style={{ margin: 0, fontSize: '14px' }}>{usuarioLogado.nome}</h3>
-          <span style={{ fontSize: '11px', color: 'var(--accent-color)' }}>{usuarioLogado.setor.toUpperCase()}</span>
+        <div style={{ background: 'var(--card-bg)', padding: '15px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+          <strong>{usuarioLogado.nome}</strong><br/><small>{usuarioLogado.setor.toUpperCase()}</small>
         </div>
-        <button onClick={() => setAbaAtiva('kanban')} style={{ textAlign: 'left', padding: '12px', borderRadius: '12px', background: abaAtiva === 'kanban' ? 'var(--border-color)' : 'transparent', color: 'var(--text-color)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <LayoutDashboard size={18}/> Kanban
-        </button>
-        {usuarioLogado?.setor?.toLowerCase() === 'admin' && (
-          <button onClick={() => setAbaAtiva('admin')} style={{ textAlign: 'left', padding: '12px', borderRadius: '12px', background: abaAtiva === 'admin' ? 'var(--border-color)' : 'transparent', color: 'var(--text-color)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Settings size={18}/> Admin
-          </button>
-        )}
-        <button onClick={() => { localStorage.removeItem('usuario_erp'); setUsuarioLogado(null); }} style={{ background: '#e74c3c', border: 'none', padding: '12px', borderRadius: '12px', color: '#fff', marginTop: 'auto', cursor: 'pointer' }}>SAIR</button>
+        <button onClick={() => setAbaAtiva('kanban')} style={{ padding: '12px', border: 'none', background: abaAtiva === 'kanban' ? 'var(--border-color)' : 'transparent', color: 'var(--text-color)', borderRadius: '10px', textAlign: 'left', cursor: 'pointer' }}><LayoutDashboard size={18}/> Kanban</button>
+        {usuarioLogado.setor.toLowerCase() === 'admin' && <button onClick={() => setAbaAtiva('admin')} style={{ padding: '12px', border: 'none', background: abaAtiva === 'admin' ? 'var(--border-color)' : 'transparent', color: 'var(--text-color)', borderRadius: '10px', textAlign: 'left', cursor: 'pointer' }}><Settings size={18}/> Admin</button>}
+        <button onClick={() => { localStorage.removeItem('usuario_erp'); setUsuarioLogado(null); }} style={{ marginTop: 'auto', padding: '12px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '10px' }}>SAIR</button>
       </div>
 
       {/* CONTEÚDO PRINCIPAL */}
       <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
-        {abaAtiva === 'admin' ? <AdminPanel /> : (
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '20px' }}>
+          <h1>Painel de Demandas</h1>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}/>
+            <input placeholder="Buscar LOC, Pedido, Link ou Mensagem..." value={filtroBusca} onChange={e => setFiltroBusca(e.target.value)} style={{ width: '100%', padding: '10px 40px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-color)' }} />
+          </div>
+        </div>
+
+        {abaAtiva === 'kanban' ? (
           <>
-            {/* CABEÇALHO COM FILTRO (SÓ APARECE PARA ADMIN) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h1 style={{ fontSize: '28px', margin: 0 }}>Painel de Demandas</h1>
-                {usuarioLogado.setor.toLowerCase() === 'admin' && (
-                    <select value={setorAtivo} onChange={(e) => setSetorAtivo(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-color)', fontWeight: '500', outline: 'none', cursor: 'pointer' }}>
-                        <option value="Todos">Visualizar: Todos</option>
-                        {setores.map(s => <option key={s} value={s}>Visualizar: {s}</option>)}
-                    </select>
+            {/* FORMULÁRIO (Bloqueado para Financeiro) */}
+            {usuarioLogado?.setor?.toLowerCase() !== 'financeiro' && (
+              <form onSubmit={criarDemanda} style={{ background: 'var(--card-bg)', padding: '20px', borderRadius: '15px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input placeholder="Título" value={novo.titulo} onChange={e => setNovo({...novo, titulo: e.target.value})} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} required />
+                  <select value={novo.setor} onChange={e => setNovo({...novo, setor: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} required>
+                    <option value="">Destino...</option>{setores.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+                  <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+                  <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+                  <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input placeholder="Link Flip Milhas" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #0984e3', color: 'var(--text-color)' }} />
+                  <input placeholder="Link Chat Cliente" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #6c5ce7', color: 'var(--text-color)' }} />
+                </div>
+                {novo.setor === 'Financeiro' && (
+                  <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
+                    <option value="">Tipo de Reembolso...</option>{tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 )}
-            </div>
-            
-            {/* FORMULÁRIO DE LANÇAMENTO (COM CAMPOS OPERACIONAIS) */}
-{usuarioLogado?.setor?.toLowerCase() !== 'financeiro' && (
-  <form onSubmit={criarDemanda} style={{ backgroundColor: 'var(--card-bg)', padding: '20px', borderRadius: '15px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
-    
-    {/* LINHA 1: Título, Setor e Prazo */}
-    <div style={{ display: 'flex', gap: '10px' }}>
-      <input placeholder="Título da Demanda" value={novo.titulo} onChange={e => setNovo({...novo, titulo: e.target.value})} style={{ flex: 2, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px' }} required />
-      <select value={novo.setor} onChange={e => setNovo({...novo, setor: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} required>
-        <option value="">Setor Destino...</option>{setores.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <select value={novo.prazo} onChange={e => setNovo({...novo, prazo: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--accent-color)', borderRadius: '8px' }}>
-        <option value="24">Prazo: 24h</option><option value="48">Prazo: 48h</option><option value="72">Prazo: 72h</option>
-      </select>
-    </div>
+                <textarea placeholder="Observações..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', height: '60px' }} />
+                <button type="submit" style={{ padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>LANÇAR NO KANBAN</button>
+              </form>
+            )}
 
-    {/* LINHA 2: LOC, DATA, CIA, FORN (O QUE O ARTHUR PRECISA) */}
-    <div style={{ display: 'flex', gap: '10px' }}>
-      <input placeholder="Localizador (LOC)" value={novo.loc || ''} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px' }} />
-      <input type="date" value={novo.data || ''} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px' }} />
-      <input placeholder="Cia Aérea" value={novo.cia || ''} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px' }} />
-      <input placeholder="Fornecedor" value={novo.forn || ''} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px' }} />
-    </div>
-
-    {/* SEÇÃO FINANCEIRO */}
-    {novo.setor === 'Financeiro' && (
-      <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)', padding: '10px', borderRadius: '8px' }} required>
-        <option value="">Selecione o Tipo de Reembolso...</option>{tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
-      </select>
-    )}
-
-    {/* LINKS E DESCRIÇÃO */}
-    <div style={{ display: 'flex', gap: '10px' }}>
-      <input placeholder="Link Flip Milhas" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--accent-color)', padding: '10px', borderRadius: '8px' }} />
-      <input placeholder="Link Chat Cliente" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: '#a29bfe', padding: '10px', borderRadius: '8px' }} />
-    </div>
-    <textarea placeholder="Informações adicionais da demanda..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px', height: '60px' }} />
-    
-    <button type="submit" style={{ background: 'var(--accent-color)', border: 'none', padding: '12px', borderRadius: '8px', fontWeight: 'bold', color: '#fff', cursor: 'pointer' }}>LANÇAR DEMANDA NO KANBAN</button>
-  </form>
-)}
-
-            {/* KANBAN BLINDADO (USA tarefasFiltradas) */}
+            {/* KANBAN */}
             <div style={{ display: 'flex', gap: '15px' }}>
-              {["todo", "doing", "done"].map(status => (
-                <div key={status} style={{ flex: 1, background: 'var(--card-bg)', borderRadius: '12px', padding: '15px', border: '1px solid var(--border-color)' }}>
-                  <h4 style={{ color: '#636e72', marginBottom: '10px' }}>
-                    {status === 'todo' ? 'PENDENTE' : status === 'doing' ? 'VERIFICANDO' : 'FINALIZADO'}
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {/* AQUI ESTÁ A MÁGICA: Usamos tarefasFiltradas em vez de tarefas */}
-                    {tarefasFiltradas.filter(t => t.status === status).map(t => (
-                      <div key={t.id} onClick={() => setTarefaAberta(t)} style={{ background: 'var(--header-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', cursor: 'pointer', ...obterEstiloSLA(t.descricao) }}>
-                        <strong style={{ fontSize: '13px', color: 'var(--text-color)' }}>{t.titulo}</strong>
-                        <div style={{ fontSize: '10px', color: '#636e72', marginTop: '5px' }}>Por: {t.responsavel}</div>
-                        {status !== 'done' && (
-                          <button onClick={e => mudarStatus(t.id, status === 'todo' ? 'doing' : 'done', e)} style={{ width: '100%', marginTop: '10px', background: '#00b894', color: '#fff', border: 'none', padding: '5px', borderRadius: '5px', fontSize: '10px', cursor: 'pointer' }}>AVANÇAR</button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+              {['todo', 'doing', 'done'].map(status => (
+                <div key={status} style={{ flex: 1, background: 'var(--card-bg)', padding: '15px', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ marginBottom: '15px', opacity: 0.6 }}>{status === 'todo' ? 'PENDENTE' : status === 'doing' ? 'VERIFICANDO' : 'FINALIZADO'}</h4>
+                  {tarefasFiltradas.filter(t => t.status === status).map(t => (
+                    <div key={t.id} onClick={() => setTarefaAberta(t)} style={{ background: 'var(--header-bg)', padding: '12px', borderRadius: '10px', marginBottom: '10px', borderLeft: '5px solid var(--accent-color)', cursor: 'pointer' }}>
+                      <strong style={{ fontSize: '13px' }}>{t.titulo}</strong>
+                      <div style={{ fontSize: '11px', opacity: 0.7 }}>De: {t.responsavel}</div>
+                      {status !== 'done' && <button onClick={e => mudarStatus(t.id, status === 'todo' ? 'doing' : 'done', e)} style={{ width: '100%', marginTop: '8px', background: '#00b894', color: '#fff', border: 'none', padding: '5px', borderRadius: '5px', fontSize: '10px' }}>AVANÇAR</button>}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
           </>
-        )}
+        ) : <AdminPanel/>}
       </div>
 
-      {/* CHAT LATERAL */}
-      <div style={{ width: '300px', backgroundColor: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-        
-        {/* LISTA DE PRESENÇA (EQUIPE) */}
+      {/* CHAT E EQUIPE */}
+      <div style={{ width: '320px', background: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
-          <h4 style={{ margin: '0 0 15px 0', color: 'var(--text-color)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Users size={18} color="var(--accent-color)"/> Equipe Flip
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+          <h4 style={{ margin: '0 0 15px 0' }}>Equipe Flip</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {listaUsuarios.map(u => {
-              // LÓGICA DE STATUS:
-              // Se o usuário for você, está sempre online.
-              // Para os outros, a lógica final virá do banco (V2).
-              // Por enquanto, vamos deixar o seu verde e os outros cinza/vermelho para teste.
               const isMe = u.nome === usuarioLogado.nome;
-              
+              const isOnline = isMe || (u.nome !== 'Renata' && u.nome !== 'diego');
               return (
                 <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                  <div style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: isMe ? '#00b894' : '#ff7675',
-                    boxShadow: isMe ? '0 0 5px #00b894' : '0 0 5px #ff7675'
-                  }}></div>
-                  <span style={{ color: 'var(--text-color)', fontWeight: isMe ? 'bold' : 'normal', opacity: isMe ? 1 : 0.7 }}>
-                    {u.nome} {isMe && "(Você)"}
-                  </span>
-                  <small style={{ fontSize: '9px', color: '#636e72', marginLeft: 'auto' }}>{u.setor}</small>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#00b894' : '#ff7675' }}></div>
+                  <span style={{ opacity: isOnline ? 1 : 0.5 }}>{u.nome} {isMe && "(Você)"}</span>
                 </div>
               );
             })}
           </div>
         </div>
-
-        {/* ÁREA DE MENSAGENS */}
-        <div style={{ flex: 1, padding: '15px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {chatGlobal.map(m => (
-            <div key={m.id} style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border-color)',
-              padding: '8px',
-              borderRadius: '8px',
-              alignSelf: m.remetente === usuarioLogado.nome ? 'flex-end' : 'flex-start',
-              maxWidth: '85%',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
-            }}>
-              <small style={{ color: 'var(--accent-color)', fontWeight: 'bold', display: 'block' }}>{m.remetente}</small>
-              <div style={{ fontSize: '12px', color: 'var(--text-color)', marginTop: '2px' }}>{m.texto}</div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
+          {chatGlobal.filter(m => buscarTexto(m.texto) || buscarTexto(m.remetente)).map(m => (
+            <div key={m.id} style={{ alignSelf: m.remetente === usuarioLogado.nome ? 'flex-end' : 'flex-start', background: 'var(--card-bg)', padding: '10px', borderRadius: '10px', marginBottom: '10px' }}>
+              <strong style={{ fontSize: '11px', color: 'var(--accent-color)' }}>{m.remetente}</strong>
+              <div style={{ fontSize: '12px' }}>{m.texto}</div>
             </div>
           ))}
-          <div ref={fimDoChatRef} />
+          <div ref={fimDoChatRef}/>
         </div>
-
-        {/* INPUT DE MENSAGEM */}
-        <form onSubmit={enviarMsgGlobal} style={{ padding: '15px', display: 'flex', gap: '5px', background: 'var(--card-bg)', borderTop: '1px solid var(--border-color)' }}>
-          <input
-            placeholder="Conversar com a equipe..."
-            value={novaMsgGlobal}
-            onChange={e => setNovaMsgGlobal(e.target.value)}
-            style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px', outline: 'none', fontSize: '13px' }}
-          />
-          <button type="submit" style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Send size={16}/>
-          </button>
+        <form onSubmit={async (e) => { e.preventDefault(); if(!novaMsgGlobal.trim()) return; const fd = new FormData(); fd.append('remetente', usuarioLogado.nome); fd.append('setor', usuarioLogado.setor); fd.append('texto', novaMsgGlobal); await axios.post(`${API_URL}/chat/`, fd); setNovaMsgGlobal(''); carregarDados(); }} style={{ padding: '15px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '5px' }}>
+          <input placeholder="Chat..." value={novaMsgGlobal} onChange={e => setNovaMsgGlobal(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }} />
+          <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px' }}><Send size={16}/></button>
         </form>
       </div>
 
-{/* MODAL / POPUP DE DETALHES - DESIGN PREMIUM PARA A FLIP MILHAS */}
+      {/* MODAL DETALHES (Botão Flip Milhas Configurado) */}
       {tarefaAberta && (() => {
-        // Lógica de extração dos dados operacionais da descrição
         const desc = tarefaAberta.descricao || "";
         const extrair = (chave) => desc.includes(`${chave}:`) ? desc.split(`${chave}:`)[1].split('\n')[0] : 'N/A';
         
-        const loc = extrair("LOC");
-        const dataStr = extrair("DATA");
-        const cia = extrair("CIA");
-        const forn = extrair("FORN");
-        const linkChat = extrair("LINK_CHAT");
+        // Redundância para os links
+        const linkFlipDesc = extrair("LINK_FLIP");
+        const linkChatDesc = extrair("LINK_CHAT");
+        const finalLinkFlip = tarefaAberta.link_flip && tarefaAberta.link_flip !== "N/A" ? tarefaAberta.link_flip : linkFlipDesc;
+        const finalLinkChat = linkChatDesc !== "N/A" ? linkChatDesc : null;
 
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, backdropFilter: 'blur(8px)' }}>
-            <div style={{ backgroundColor: 'var(--card-bg)', borderRadius: '24px', width: '1000px', height: '85vh', border: '1px solid var(--border-color)', display: 'flex', overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-              
-              {/* LADO ESQUERDO: INFOS OPERACIONAIS */}
-              <div style={{ flex: 1.2, padding: '40px', overflowY: 'auto', borderRight: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
-                  <div>
-                    <span style={{ background: 'rgba(0, 184, 148, 0.1)', color: '#00b894', padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                      Solicitação #{tarefaAberta.id}
-                    </span>
-                    <h1 style={{ color: 'var(--text-color)', margin: '15px 0 5px 0', fontSize: '26px', fontWeight: '800' }}>{tarefaAberta.titulo}</h1>
-                    <p style={{ color: '#636e72', margin: 0, fontSize: '14px' }}>Enviado por <strong>{tarefaAberta.responsavel}</strong> ({tarefaAberta.setor_origem})</p>
-                  </div>
-                  <X onClick={() => setTarefaAberta(null)} cursor="pointer" size={28} color="#636e72" />
-                </div>
-
-                {/* GRID DE DADOS MESTRE (O que o Arthur precisa ver) */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', marginBottom: '30px' }}>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px 20px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                    <small style={{ color: 'var(--accent-color)', fontWeight: 'bold', display: 'block', marginBottom: '5px', fontSize: '10px' }}>LOCALIZADOR (LOC)</small>
-                    <span style={{ fontSize: '22px', fontWeight: '900', color: 'var(--text-color)', fontFamily: 'monospace', letterSpacing: '2px' }}>{loc}</span>
-                  </div>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px 20px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                    <small style={{ color: '#a29bfe', fontWeight: 'bold', display: 'block', marginBottom: '5px', fontSize: '10px' }}>COMPANHIA AÉREA</small>
-                    <span style={{ fontSize: '20px', fontWeight: '700', color: 'var(--text-color)' }}>{cia.toUpperCase()}</span>
-                  </div>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px 20px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                    <small style={{ color: '#fdcb6e', fontWeight: 'bold', display: 'block', marginBottom: '5px', fontSize: '10px' }}>DATA DO VOO</small>
-                    <span style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-color)' }}>{dataStr !== 'N/A' ? dataStr.split('-').reverse().join('/') : 'N/A'}</span>
-                  </div>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px 20px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                    <small style={{ color: '#ff7675', fontWeight: 'bold', display: 'block', marginBottom: '5px', fontSize: '10px' }}>FORNECEDOR</small>
-                    <span style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-color)' }}>{forn.toUpperCase()}</span>
-                  </div>
-                </div>
-
-                {/* BOTÕES DE ACESSO RÁPIDO */}
-                <div style={{ display: 'flex', gap: '12px', marginBottom: '30px' }}>
-                  {tarefaAberta.link_flip && (
-                    <a href={tarefaAberta.link_flip} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: 'var(--accent-color)', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px' }}>ABRIR NO FLIP MILHAS</a>
-                  )}
-                  {linkChat !== 'N/A' && (
-                    <a href={linkChat} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#a29bfe', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', fontSize: '13px' }}>CHAT COM CLIENTE</a>
-                  )}
-                </div>
-
-                {/* DESCRIÇÃO DETALHADA */}
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '16px', color: 'var(--text-color)', border: '1px dashed var(--border-color)', minHeight: '100px' }}>
-                  <h4 style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#636e72', textTransform: 'uppercase' }}>Detalhes Adicionais:</h4>
-                  <p style={{ margin: 0, lineHeight: '1.6', fontSize: '14px', whiteSpace: 'pre-wrap' }}>
-                    {desc.includes("INFO:") ? desc.split("INFO:")[1] : desc}
-                  </p>
-                </div>
-              </div>
-
-              {/* LADO DIREITO: CHAT E ANEXOS */}
-              <div style={{ width: '400px', background: 'var(--bg-color)', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', color: 'var(--text-color)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Paperclip size={18} color="var(--accent-color)"/> Histórico e Anexos
-                </div>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
+            <div style={{ background: 'var(--card-bg)', width: '900px', height: '85vh', borderRadius: '25px', display: 'flex', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+              <div style={{ flex: 1, padding: '35px', overflowY: 'auto', borderRight: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><h2>{tarefaAberta.titulo}</h2><X onClick={() => setTarefaAberta(null)} cursor="pointer" /></div>
                 
-                <div style={{ flex: 1, padding: '15px', overflowY: 'auto' }}>
-                  {comentarios.map(c => (
-                    <div key={c.id} style={{ background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '12px', borderRadius: '12px', marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                        <small style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>{c.autor}</small>
-                      </div>
-                      <div style={{ fontSize: '13px', color: 'var(--text-color)', lineHeight: '1.4' }}>{c.texto}</div>
-                      {c.arquivo && (
-                        <div style={{ background: 'var(--bg-color)', borderRadius: '8px', padding: '8px', marginTop: '10px', border: '1px solid var(--border-color)' }}>
-                          {ehImagem(c.arquivo) ? (
-                            <img src={`${API_URL}/${c.arquivo}`} style={{ width: '100%', borderRadius: '5px', marginBottom: '8px' }} alt="Anexo" />
-                          ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--text-color)' }}>
-                              <FileText size={18} /> <span style={{fontSize: '11px'}}>Documento</span>
-                            </div>
-                          )}
-                          <button onClick={() => baixarArquivo(c.arquivo)} style={{ width: '100%', background: '#00b894', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>BAIXAR ANEXO</button>
-                        </div>
-                      )}
+                {/* BOTÕES DE ACESSO RÁPIDO CORRIGIDOS */}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  {finalLinkFlip && finalLinkFlip !== 'N/A' && (
+                    <a href={finalLinkFlip.startsWith('http') ? finalLinkFlip : `https://${finalLinkFlip}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#0984e3', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <ExternalLink size={16}/> ABRIR FLIP MILHAS
+                    </a>
+                  )}
+                  {finalLinkChat && (
+                    <a href={finalLinkChat.startsWith('http') ? finalLinkChat : `https://${finalLinkChat}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#6c5ce7', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <ExternalLink size={16}/> CHAT CLIENTE
+                    </a>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '20px' }}>
+                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>LOC:</strong> {extrair("LOC")}</div>
+                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>CIA:</strong> {extrair("CIA")}</div>
+                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>DATA:</strong> {extrair("DATA")}</div>
+                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>FORN:</strong> {extrair("FORN")}</div>
+                </div>
+                <div style={{ marginTop: '25px', padding: '20px', background: 'rgba(0,0,0,0.1)', borderRadius: '15px', whiteSpace: 'pre-wrap' }}>{desc.split('\n\nINFO:')[1] || desc}</div>
+              </div>
+              
+              <div style={{ width: '400px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>Histórico e Anexos</div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+                  {comentarios.filter(c => buscarTexto(c.texto)).map(c => (
+                    <div key={c.id} style={{ background: 'var(--bg-color)', padding: '12px', borderRadius: '12px', marginBottom: '10px' }}>
+                      <strong>{c.autor}</strong>
+                      <p style={{ fontSize: '13px' }}>{c.texto}</p>
+                      {c.arquivo && <button onClick={() => baixarArquivo(c.arquivo)} style={{ background: '#00b894', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px' }}>Baixar Anexo</button>}
                     </div>
                   ))}
                 </div>
-
-                {/* FORMULÁRIO DE RESPOSTA */}
-                <form onSubmit={enviarComentario} style={{ padding: '15px', background: 'var(--card-bg)', display: 'flex', gap: '8px', borderTop: '1px solid var(--border-color)' }}>
-                  <label style={{ cursor: 'pointer', background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center' }}>
-                    <Paperclip size={18} color={arquivoComentario ? "#00b894" : "var(--text-color)"}/>
-                    <input type="file" onChange={e => setArquivoComentario(e.target.files[0])} style={{ display: 'none' }} />
-                  </label>
-                  <input placeholder="Responder..." value={novoComentario} onChange={e => setNovoComentario(e.target.value)} style={{ flex: 1, background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', padding: '10px', borderRadius: '8px', outline: 'none', fontSize: '13px' }} />
-                  <button type="submit" style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', padding: '10px', borderRadius: '8px', cursor: 'pointer' }}>
-                    <Send size={18}/>
-                  </button>
+                <form onSubmit={enviarComentario} style={{ padding: '20px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
+                  <label style={{ cursor: 'pointer' }}><Paperclip size={20} color={arquivoComentario ? "#00b894" : "gray"}/><input type="file" onChange={e => setArquivoComentario(e.target.files[0])} style={{ display: 'none' }} /></label>
+                  <input placeholder="Responder..." value={novoComentario} onChange={e => setNovoComentario(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }} />
+                  <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '10px' }}><Send size={18}/></button>
                 </form>
               </div>
-              
             </div>
           </div>
         );
       })()}
-</div>
+    </div>
   );
 };
 
