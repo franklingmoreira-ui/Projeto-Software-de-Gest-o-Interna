@@ -36,7 +36,7 @@ const App = () => {
   // ESTADO: CONTROLADOR DE DADOS DO EMISSOR
   const [dadosEmissao, setDadosEmissao] = useState({ loc: '', cia: '', forn: '', data_ida: '', horario_ida: '', data_volta: '', horario_volta: '' });
 
-  // ESTADO 'NOVO': ADICIONADO HORARIO_IDA E HORARIO_VOLTA
+  // ESTADO 'NOVO'
   const [novo, setNovo] = useState({
     titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
     tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', horario_ida: '', horario_volta: '', cia: '', forn: '',
@@ -198,7 +198,6 @@ const App = () => {
     let trechoFinal = novo.origem_destino;
     let dataFinal = novo.data || 'N/A';
     
-    // 🚀 LÓGICA DO HORÁRIO NO NOVO CARD
     let horarioFinal = novo.horario_ida || 'N/A';
 
     if (novo.setor === 'Emissão') {
@@ -330,7 +329,7 @@ const App = () => {
                 </div>
               )}
 
-              {/* 🚀 FORMULÁRIO DE CRIAÇÃO DO EMISSOR COM OS NOVOS CAMPOS DE HORÁRIO */}
+              {/* MÓDULO EXCLUSIVO DE EMISSÃO COM SELETOR DE IDA E VOLTA E HORÁRIOS */}
               {novo.setor === 'Emissão' && (() => {
                 const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
                 return (
@@ -403,7 +402,8 @@ const App = () => {
                 <input placeholder={novo.setor === 'Emissão' ? "LOC (Se houver)" : "LOC"} value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 <input placeholder="Cia Aérea" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 
-                {novo.setor !== 'Emissão' && (
+                {/* Oculta Data do Voo para Emissão E Back-office */}
+                {novo.setor !== 'Emissão' && novo.setor !== 'Back-office' && (
                     <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 )}
                 
@@ -545,24 +545,32 @@ const App = () => {
                   <X onClick={() => setTarefaAberta(null)} cursor="pointer" />
                 </div>
                 
+                {/* TABELA GENÉRICA: SÓ APARECE SE NÃO FOR EMISSÃO */}
                 {tarefaAberta.setor_destino !== 'Emissão' && (
                     <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
                       <tbody>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%' }}>Localizador</td><td style={{ padding: '12px' }}>{get("LOC")}</td></tr>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
-                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td>
-                          <td style={{ padding: '12px', textAlign: 'left' }}>{(() => {
-                              const dataVoo = get("DATA");
-                              if (!dataVoo || dataVoo === 'N/A' || dataVoo.trim() === '') return 'N/A';
-                              const formataD = (dStr) => { const cleanD = dStr.trim(); if (cleanD.includes('-')) { const [ano, mes, dia] = cleanD.split('-'); return `${dia.trim()}/${mes.trim()}/${ano.trim()}`; } return cleanD; };
-                              return formataD(dataVoo);
-                            })()}</td>
-                        </tr>
-                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Horário do Voo</td>
-                            <td style={{ padding: '12px' }}>{get("HORARIO") !== 'N/A' && get("HORARIO") !== '' ? get("HORARIO").replace('IDA:', '').trim() : <span style={{ opacity: 0.5 }}>Não informado</span>}</td>
-                        </tr>
+                        
+                        {/* OCULTA DATA E HORÁRIO SE O CARD FOR DO BACK-OFFICE */}
+                        {tarefaAberta.setor_destino !== 'Back-office' && (
+                          <>
+                            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Data do Voo</td>
+                              <td style={{ padding: '12px', textAlign: 'left' }}>{(() => {
+                                  const dataVoo = get("DATA");
+                                  if (!dataVoo || dataVoo === 'N/A' || dataVoo.trim() === '') return 'N/A';
+                                  const formataD = (dStr) => { const cleanD = dStr.trim(); if (cleanD.includes('-')) { const [ano, mes, dia] = cleanD.split('-'); return `${dia.trim()}/${mes.trim()}/${ano.trim()}`; } return cleanD; };
+                                  return formataD(dataVoo);
+                                })()}</td>
+                            </tr>
+                            <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Horário do Voo</td>
+                                <td style={{ padding: '12px' }}>{get("HORARIO") !== 'N/A' && get("HORARIO") !== '' ? get("HORARIO").replace('IDA:', '').trim() : <span style={{ opacity: 0.5 }}>Não informado</span>}</td>
+                            </tr>
+                          </>
+                        )}
+                        
                         <tr><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Fornecedor</td><td style={{ padding: '12px' }}>{get("FORN")}</td></tr>
                       </tbody>
                     </table>
