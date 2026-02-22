@@ -5,6 +5,7 @@
   --card-bg: #f4f4f4;
   --header-bg: #e0e0e0;
   --accent-color: #646cff;
+  --accent-rgb: 100, 108, 255;
 }
 
 /* 2. Cores para o Modo Escuro */
@@ -14,6 +15,7 @@
   --card-bg: #2d2d2d;
   --header-bg: #333333;
   --accent-color: #8884ff;
+  --accent-rgb: 136, 132, 255;
 }
 
 /* 3. Aplicação Global */
@@ -21,29 +23,82 @@ body {
   background-color: var(--bg-color);
   color: var(--text-color);
   margin: 0;
-  transition: background-color 0.3s, color 0.3s; /* Fade suave */
+  transition: background-color 0.3s, color 0.3s;
   min-height: 100vh;
 }
 
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0; /* Resetado para ocupar a tela toda com o flex do App.jsx */
   text-align: center;
 }
 
-/* 4. Seus Estilos de Logo e Animações */
+/* 4. Estilos de Grid e Operação (O Coração do Orbit ERP) */
+
+/* Grid perfeito para LOC, CIA, DATA e FORN */
+.grid-dados-operacionais {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 2 colunas perfeitas */
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+/* Estilização dos Badges de Informação */
+.badge-info {
+  background: var(--bg-color);
+  padding: 12px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transition: all 0.2s ease;
+}
+
+.badge-info:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.badge-info small {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+  opacity: 0.6;
+  color: var(--accent-color);
+}
+
+.badge-info strong {
+  font-size: 16px;
+  font-family: 'monospace'; /* Facilita leitura de códigos/LOCs */
+}
+
+/* Campo de Observações Adicionais (Abaixo dos botões) */
+.info-principal {
+  background: rgba(var(--accent-rgb), 0.05); /* Usa o RGB para transparência */
+  padding: 20px;
+  border-radius: 16px;
+  border-left: 4px solid var(--accent-color);
+  margin-top: 15px;
+  text-align: left;
+  line-height: 1.6;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 5. Utilidades e Estilos de Logo */
 .logo {
   height: 6em;
   padding: 1.5em;
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  filter: drop-shadow(0 0 2em var(--accent-color));
 }
 
 @keyframes logo-spin {
@@ -51,18 +106,17 @@ body {
   to { transform: rotate(360deg); }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-  background-color: var(--card-bg); /* Usando a variável aqui */
-  border-radius: 8px;
-}
-
 .read-the-docs {
   color: #888;
+}
+
+/* Ajuste para inputs e textareas no tema */
+input, textarea, select {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.2);
 }

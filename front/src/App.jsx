@@ -39,7 +39,7 @@ const App = () => {
   const API_URL = "http://localhost:8000";
   const fimDoChatRef = useRef(null);
 
-  // --- 2. LOGICA DE SINCRONIZAÇÃO ---
+  // --- 2. LOGICA ---
   useEffect(() => {
     if (darkMode) document.body.classList.add('dark-mode');
     else document.body.classList.remove('dark-mode');
@@ -91,8 +91,6 @@ const App = () => {
     e.preventDefault();
     const fd = new FormData();
     const tit = novo.setor === 'Financeiro' && novo.tipo_financeiro ? `[${novo.tipo_financeiro.toUpperCase()}] ${novo.titulo}` : novo.titulo;
-    
-    // REDUNDÂNCIA: Salvando todos os links na descrição para garantir a busca e os botões
     const descricaoComDados = `PRAZO:${novo.prazo}h\nLINK_FLIP:${novo.link_flip || 'N/A'}\nLINK_CHAT:${novo.link_chat || 'N/A'}\nLOC:${novo.loc || 'N/A'}\nDATA:${novo.data || 'N/A'}\nCIA:${novo.cia || 'N/A'}\nFORN:${novo.forn || 'N/A'}\n\nINFO:${novo.desc}`;
     
     fd.append('titulo', tit);
@@ -100,7 +98,6 @@ const App = () => {
     fd.append('descricao', descricaoComDados);
     fd.append('responsavel', usuarioLogado.nome);
     fd.append('setor_origem', usuarioLogado.setor);
-    fd.append('link_flip', novo.link_flip || '');
     
     await axios.post(`${API_URL}/tarefas/`, fd);
     setNovo({ titulo: '', setor: '', desc: '', link_flip: '', link_chat: '', tipo_financeiro: '', prazo: '24', loc: '', data: '', cia: '', forn: '' });
@@ -125,21 +122,18 @@ const App = () => {
   const tarefasFiltradas = tarefas.filter(t => {
     if (!usuarioLogado) return false;
     const setorUser = usuarioLogado.setor.toLowerCase();
-    const passaSeguranca = setorUser === 'admin' 
-      ? (setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo)
-      : (t.setor_destino === usuarioLogado.setor);
-    const bateBusca = buscarTexto(t.titulo) || buscarTexto(t.descricao) || (t.link_flip && buscarTexto(t.link_flip));
+    const passaSeguranca = setorUser === 'admin' ? (setorAtivo === 'Todos' ? true : t.setor_destino === setorAtivo) : (t.setor_destino === usuarioLogado.setor);
+    const bateBusca = buscarTexto(t.titulo) || buscarTexto(t.descricao);
     return passaSeguranca && bateBusca;
   });
 
-  // RENDERIZAÇÃO LOGIN (Omitida para encurtar, mas funcional no seu arquivo)
   if (!usuarioLogado) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: 'var(--bg-color)', color: 'var(--text-color)', fontFamily: 'sans-serif' }}>
         <form onSubmit={async (e) => { e.preventDefault(); try { const r = await axios.post(`${API_URL}/login/?login_user=${formLogin.login}&senha_user=${formLogin.senha}`); setUsuarioLogado(r.data); } catch { alert("Login Inválido!"); } }} style={{ backgroundColor: 'var(--card-bg)', padding: '50px', borderRadius: '24px', border: '1px solid var(--border-color)', width: '380px' }}>
           <div style={{ textAlign: 'center', marginBottom: '30px' }}><Lock color="var(--accent-color)" size={40} /><h2>Orbit ERP</h2></div>
-          <input placeholder="Login" value={formLogin.login} onChange={e => setFormLogin({...formLogin, login: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
-          <input type="password" placeholder="Senha" value={formLogin.senha} onChange={e => setFormLogin({...formLogin, senha: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
+          <input placeholder="Login" value={formLogin.login} onChange={e => setFormLogin({...formLogin, login: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-color)' }} />
+          <input type="password" placeholder="Senha" value={formLogin.senha} onChange={e => setFormLogin({...formLogin, senha: e.target.value})} style={{ width: '100%', padding: '12px', marginBottom: '20px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-color)', color: 'var(--text-color)' }} />
           <button type="submit" style={{ width: '100%', padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>ENTRAR</button>
         </form>
       </div>
@@ -153,11 +147,8 @@ const App = () => {
       <div style={{ width: '260px', backgroundColor: 'var(--header-bg)', borderRight: '1px solid var(--border-color)', padding: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
         <h2 style={{ color: 'var(--accent-color)' }}>Orbit ERP</h2>
         <button onClick={() => setDarkMode(!darkMode)} style={{ padding: '10px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-color)', cursor: 'pointer' }}>
-          {darkMode ? <Sun size={16}/> : <Moon size={16}/>} {darkMode ? 'Claro' : 'Escuro'}
+          {darkMode ? <Sun size={16}/> : <Moon size={16}/>} Tema
         </button>
-        <div style={{ background: 'var(--card-bg)', padding: '15px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-          <strong>{usuarioLogado.nome}</strong><br/><small>{usuarioLogado.setor.toUpperCase()}</small>
-        </div>
         <button onClick={() => setAbaAtiva('kanban')} style={{ padding: '12px', border: 'none', background: abaAtiva === 'kanban' ? 'var(--border-color)' : 'transparent', color: 'var(--text-color)', borderRadius: '10px', textAlign: 'left', cursor: 'pointer' }}><LayoutDashboard size={18}/> Kanban</button>
         {usuarioLogado.setor.toLowerCase() === 'admin' && <button onClick={() => setAbaAtiva('admin')} style={{ padding: '12px', border: 'none', background: abaAtiva === 'admin' ? 'var(--border-color)' : 'transparent', color: 'var(--text-color)', borderRadius: '10px', textAlign: 'left', cursor: 'pointer' }}><Settings size={18}/> Admin</button>}
         <button onClick={() => { localStorage.removeItem('usuario_erp'); setUsuarioLogado(null); }} style={{ marginTop: 'auto', padding: '12px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '10px' }}>SAIR</button>
@@ -169,13 +160,13 @@ const App = () => {
           <h1>Painel de Demandas</h1>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}/>
-            <input placeholder="Buscar LOC, Pedido, Link ou Mensagem..." value={filtroBusca} onChange={e => setFiltroBusca(e.target.value)} style={{ width: '100%', padding: '10px 40px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-color)' }} />
+            <input placeholder="Buscar..." value={filtroBusca} onChange={e => setFiltroBusca(e.target.value)} style={{ width: '100%', padding: '10px 40px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'var(--card-bg)', color: 'var(--text-color)' }} />
           </div>
         </div>
 
         {abaAtiva === 'kanban' ? (
           <>
-            {/* FORMULÁRIO (Bloqueado para Financeiro) */}
+            {/* FORMULÁRIO COM TUDO: FINANCEIRO + CORES ESCURAS */}
             {usuarioLogado?.setor?.toLowerCase() !== 'financeiro' && (
               <form onSubmit={criarDemanda} style={{ background: 'var(--card-bg)', padding: '20px', borderRadius: '15px', display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', border: '1px solid var(--border-color)' }}>
                 <div style={{ display: 'flex', gap: '10px' }}>
@@ -184,35 +175,44 @@ const App = () => {
                     <option value="">Destino...</option>{setores.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
-                  <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
-                  <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
-                  <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)' }} />
-                </div>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <input placeholder="Link Flip Milhas" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #0984e3', color: 'var(--text-color)' }} />
-                  <input placeholder="Link Chat Cliente" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #6c5ce7', color: 'var(--text-color)' }} />
-                </div>
+
+                {/* FUNÇÃO FINANCEIRO NO FORMULÁRIO */}
                 {novo.setor === 'Financeiro' && (
                   <select value={novo.tipo_financeiro} onChange={e => setNovo({...novo, tipo_financeiro: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid #00b894', color: 'var(--text-color)' }} required>
-                    <option value="">Tipo de Reembolso...</option>{tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="">Tipo de Reembolso...</option>
+                    {tiposFinanceiro.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 )}
-                <textarea placeholder="Observações..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', height: '60px' }} />
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input placeholder="LOC" value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                  <input placeholder="Cia" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                  <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                  <input placeholder="Fornecedor" value={novo.forn} onChange={e => setNovo({...novo, forn: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input placeholder="Link Flip" value={novo.link_flip} onChange={e => setNovo({...novo, link_flip: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                  <input placeholder="Link Chat" value={novo.link_chat} onChange={e => setNovo({...novo, link_chat: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
+                </div>
+                <textarea placeholder="Observações..." value={novo.desc} onChange={e => setNovo({...novo, desc: e.target.value})} style={{ padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px', height: '60px' }} />
                 <button type="submit" style={{ padding: '12px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold' }}>LANÇAR NO KANBAN</button>
               </form>
             )}
 
-            {/* KANBAN */}
+            {/* KANBAN COM SLOTS CORRIGIDOS */}
             <div style={{ display: 'flex', gap: '15px' }}>
               {['todo', 'doing', 'done'].map(status => (
                 <div key={status} style={{ flex: 1, background: 'var(--card-bg)', padding: '15px', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
-                  <h4 style={{ marginBottom: '15px', opacity: 0.6 }}>{status === 'todo' ? 'PENDENTE' : status === 'doing' ? 'VERIFICANDO' : 'FINALIZADO'}</h4>
+                  <h4 style={{ marginBottom: '15px', opacity: 0.6 }}>
+                    {status === 'todo' ? 'PENDENTE' : status === 'doing' ? 'VERIFICANDO' : 'FINALIZADO'}
+                  </h4>
                   {tarefasFiltradas.filter(t => t.status === status).map(t => (
                     <div key={t.id} onClick={() => setTarefaAberta(t)} style={{ background: 'var(--header-bg)', padding: '12px', borderRadius: '10px', marginBottom: '10px', borderLeft: '5px solid var(--accent-color)', cursor: 'pointer' }}>
-                      <strong style={{ fontSize: '13px' }}>{t.titulo}</strong>
-                      <div style={{ fontSize: '11px', opacity: 0.7 }}>De: {t.responsavel}</div>
+                      <strong>{t.titulo}</strong>
+                      <p style={{ fontSize: '11px', opacity: 0.8, margin: '5px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.descricao.includes("INFO:") ? t.descricao.split("INFO:")[1]?.trim() : t.descricao}
+                      </p>
+                      <div style={{ fontSize: '10px', opacity: 0.6 }}>De: {t.responsavel}</div>
                       {status !== 'done' && <button onClick={e => mudarStatus(t.id, status === 'todo' ? 'doing' : 'done', e)} style={{ width: '100%', marginTop: '8px', background: '#00b894', color: '#fff', border: 'none', padding: '5px', borderRadius: '5px', fontSize: '10px' }}>AVANÇAR</button>}
                     </div>
                   ))}
@@ -223,26 +223,25 @@ const App = () => {
         ) : <AdminPanel/>}
       </div>
 
-      {/* CHAT E EQUIPE */}
+      {/* CHAT GLOBAL E EQUIPE */}
       <div style={{ width: '320px', background: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
           <h4 style={{ margin: '0 0 15px 0' }}>Equipe Flip</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {listaUsuarios.map(u => {
-              const isMe = u.nome === usuarioLogado.nome;
-              const isOnline = isMe || (u.nome !== 'Renata' && u.nome !== 'diego');
+              const isOnline = u.nome === usuarioLogado.nome || (u.nome !== 'Renata' && u.nome !== 'diego');
               return (
                 <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
                   <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#00b894' : '#ff7675' }}></div>
-                  <span style={{ opacity: isOnline ? 1 : 0.5 }}>{u.nome} {isMe && "(Você)"}</span>
+                  <span>{u.nome}</span>
                 </div>
               );
             })}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
-          {chatGlobal.filter(m => buscarTexto(m.texto) || buscarTexto(m.remetente)).map(m => (
-            <div key={m.id} style={{ alignSelf: m.remetente === usuarioLogado.nome ? 'flex-end' : 'flex-start', background: 'var(--card-bg)', padding: '10px', borderRadius: '10px', marginBottom: '10px' }}>
+          {chatGlobal.map(m => (
+            <div key={m.id} style={{ background: 'var(--card-bg)', padding: '10px', borderRadius: '10px', marginBottom: '10px' }}>
               <strong style={{ fontSize: '11px', color: 'var(--accent-color)' }}>{m.remetente}</strong>
               <div style={{ fontSize: '12px' }}>{m.texto}</div>
             </div>
@@ -255,61 +254,70 @@ const App = () => {
         </form>
       </div>
 
-      {/* MODAL DETALHES (Botão Flip Milhas Configurado) */}
+      {/* MODAL DETALHES FINAL (Tabelas + Financeiro + Clipe Centralizado) */}
       {tarefaAberta && (() => {
-        const desc = tarefaAberta.descricao || "";
-        const extrair = (chave) => desc.includes(`${chave}:`) ? desc.split(`${chave}:`)[1].split('\n')[0] : 'N/A';
-        
-        // Redundância para os links
-        const linkFlipDesc = extrair("LINK_FLIP");
-        const linkChatDesc = extrair("LINK_CHAT");
-        const finalLinkFlip = tarefaAberta.link_flip && tarefaAberta.link_flip !== "N/A" ? tarefaAberta.link_flip : linkFlipDesc;
-        const finalLinkChat = linkChatDesc !== "N/A" ? linkChatDesc : null;
+        const d = tarefaAberta.descricao || "";
+        const get = (k) => d.includes(`${k}:`) ? d.split(`${k}:`)[1].split('\n')[0] : 'N/A';
+        const flip = get("LINK_FLIP") !== 'N/A' ? get("LINK_FLIP") : tarefaAberta.link_flip;
+        const chatL = get("LINK_CHAT");
 
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 }}>
-            <div style={{ background: 'var(--card-bg)', width: '900px', height: '85vh', borderRadius: '25px', display: 'flex', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-              <div style={{ flex: 1, padding: '35px', overflowY: 'auto', borderRight: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><h2>{tarefaAberta.titulo}</h2><X onClick={() => setTarefaAberta(null)} cursor="pointer" /></div>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 3000 }}>
+            <div style={{ background: 'var(--card-bg)', width: '950px', height: '85vh', borderRadius: '25px', display: 'flex', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+              
+              <div style={{ flex: 1.2, padding: '35px', overflowY: 'auto', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <h2 style={{ margin: 0 }}>{tarefaAberta.titulo}</h2>
+                  <X onClick={() => setTarefaAberta(null)} cursor="pointer" />
+                </div>
                 
-                {/* BOTÕES DE ACESSO RÁPIDO CORRIGIDOS */}
-                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  {finalLinkFlip && finalLinkFlip !== 'N/A' && (
-                    <a href={finalLinkFlip.startsWith('http') ? finalLinkFlip : `https://${finalLinkFlip}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#0984e3', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <ExternalLink size={16}/> ABRIR FLIP MILHAS
-                    </a>
-                  )}
-                  {finalLinkChat && (
-                    <a href={finalLinkChat.startsWith('http') ? finalLinkChat : `https://${finalLinkChat}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#6c5ce7', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      <ExternalLink size={16}/> CHAT CLIENTE
-                    </a>
-                  )}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
+                  <tbody>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%', borderRight: '1px solid var(--border-color)' }}>Localizador</td><td style={{ padding: '12px', fontFamily: 'monospace' }}>{get("LOC")}</td></tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', borderRight: '1px solid var(--border-color)' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', borderRight: '1px solid var(--border-color)' }}>Data do Voo</td><td style={{ padding: '12px' }}>{get("DATA")}</td></tr>
+                    <tr><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', borderRight: '1px solid var(--border-color)' }}>Fornecedor</td><td style={{ padding: '12px' }}>{get("FORN")}</td></tr>
+                  </tbody>
+                </table>
+
+                {tarefaAberta.setor_destino === 'Financeiro' && (
+                  <div style={{ marginBottom: '15px', padding: '12px', border: '1px solid #00b894', borderRadius: '12px', background: 'rgba(0,184,148,0.05)', color: '#00b894', fontWeight: 'bold', fontSize: '13px' }}>
+                    TIPO: {tarefaAberta.titulo.includes('[') ? tarefaAberta.titulo.split('[')[1].split(']')[0] : 'Reembolso'}
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '20px' }}>
+                  <h4 style={{ marginBottom: '8px', opacity: 0.6, fontSize: '11px', textTransform: 'uppercase' }}>Observações Adicionais</h4>
+                  <div style={{ padding: '15px', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(128,128,128,0.05)', minHeight: '100px', fontSize: '15px', whiteSpace: 'pre-wrap' }}>
+                    {d.includes("INFO:") ? d.split("INFO:")[1]?.trim() : d}
+                  </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '20px' }}>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>LOC:</strong> {extrair("LOC")}</div>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>CIA:</strong> {extrair("CIA")}</div>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>DATA:</strong> {extrair("DATA")}</div>
-                  <div style={{ background: 'var(--bg-color)', padding: '15px', borderRadius: '15px' }}><strong>FORN:</strong> {extrair("FORN")}</div>
+                <div style={{ marginTop: 'auto', display: 'flex', gap: '10px', paddingTop: '20px' }}>
+                  {flip && flip !== 'N/A' && <a href={flip.startsWith('http') ? flip : `https://${flip}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#0984e3', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> FLIP MILHAS</a>}
+                  {chatL && chatL !== 'N/A' && <a href={chatL.startsWith('http') ? chatL : `https://${chatL}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#6c5ce7', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> CHAT CLIENTE</a>}
                 </div>
-                <div style={{ marginTop: '25px', padding: '20px', background: 'rgba(0,0,0,0.1)', borderRadius: '15px', whiteSpace: 'pre-wrap' }}>{desc.split('\n\nINFO:')[1] || desc}</div>
               </div>
-              
-              <div style={{ width: '400px', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)' }}>Histórico e Anexos</div>
+
+              <div style={{ width: '400px', display: 'flex', flexDirection: 'column', background: 'var(--bg-color)' }}>
+                <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', fontWeight: 'bold' }}>Histórico</div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-                  {comentarios.filter(c => buscarTexto(c.texto)).map(c => (
-                    <div key={c.id} style={{ background: 'var(--bg-color)', padding: '12px', borderRadius: '12px', marginBottom: '10px' }}>
-                      <strong>{c.autor}</strong>
+                  {comentarios.map(c => (
+                    <div key={c.id} style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '12px', marginBottom: '10px', border: '1px solid var(--border-color)' }}>
+                      <strong style={{ color: 'var(--accent-color)', fontSize: '11px' }}>{c.autor}</strong>
                       <p style={{ fontSize: '13px' }}>{c.texto}</p>
-                      {c.arquivo && <button onClick={() => baixarArquivo(c.arquivo)} style={{ background: '#00b894', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px' }}>Baixar Anexo</button>}
+                      {c.arquivo && <button onClick={() => baixarArquivo(c.arquivo)} style={{ background: '#00b894', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', cursor: 'pointer' }}>Download</button>}
                     </div>
                   ))}
                 </div>
-                <form onSubmit={enviarComentario} style={{ padding: '20px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '8px' }}>
-                  <label style={{ cursor: 'pointer' }}><Paperclip size={20} color={arquivoComentario ? "#00b894" : "gray"}/><input type="file" onChange={e => setArquivoComentario(e.target.files[0])} style={{ display: 'none' }} /></label>
-                  <input placeholder="Responder..." value={novoComentario} onChange={e => setNovoComentario(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }} />
-                  <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '10px' }}><Send size={18}/></button>
+                {/* CLIPE CENTRALIZADO */}
+                <form onSubmit={enviarComentario} style={{ padding: '20px', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <Paperclip size={20} color={arquivoComentario ? "#00b894" : "gray"}/>
+                    <input type="file" onChange={e => setArquivoComentario(e.target.files[0])} style={{ display: 'none' }} />
+                  </label>
+                  <input placeholder="Responder..." value={novoComentario} onChange={e => setNovoComentario(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '10px', background: 'var(--card-bg)', color: 'var(--text-color)', border: '1px solid var(--border-color)', outline: 'none' }} />
+                  <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', display: 'flex', alignItems: 'center' }}><Send size={18}/></button>
                 </form>
               </div>
             </div>
