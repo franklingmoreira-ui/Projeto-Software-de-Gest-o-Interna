@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { X, Paperclip, Send, Download, Lock, LayoutDashboard, Settings, Sun, Moon, Search, ExternalLink } from 'lucide-react';
+import { X, Paperclip, Send, Download, Lock, LayoutDashboard, Settings, Sun, Moon, Search, ExternalLink, MessageCircle, ChevronLeft } from 'lucide-react';
 import AdminPanel from './AdminPanel.jsx';
 
 const App = () => {
@@ -21,22 +21,22 @@ const App = () => {
   const [filtroBusca, setFiltroBusca] = useState('');
   const [setorAtivo, setSetorAtivo] = useState('Todos');
   const [tarefas, setTarefas] = useState([]);
-  const [chatGlobal, setChatGlobal] = useState([]);
   const [listaUsuarios, setListaUsuarios] = useState([]);
   const [tarefaAberta, setTarefaAberta] = useState(null);
   const [comentarios, setComentarios] = useState([]);
   const [novoComentario, setNovoComentario] = useState('');
   const [arquivoComentario, setArquivoComentario] = useState(null);
   const [formLogin, setFormLogin] = useState({ login: '', senha: '' });
-  const [novaMsgGlobal, setNovaMsgGlobal] = useState('');
   
-  // ESTADO: CONTROLE DE TEMPO AO VIVO PARA O TIMER
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  // ESTADOS DO CHAT PRIVADO
+  const [chatAtivo, setChatAtivo] = useState(null);
+  const [mensagensChat, setMensagensChat] = useState([]);
+  const [novaMsgChat, setNovaMsgChat] = useState('');
+  const [arquivoChat, setArquivoChat] = useState(null);
 
-  // ESTADO: CONTROLADOR DE DADOS DO EMISSOR
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const [dadosEmissao, setDadosEmissao] = useState({ loc: '', cia: '', forn: '', data_ida: '', horario_ida: '', data_volta: '', horario_volta: '' });
 
-  // ESTADO 'NOVO'
   const [novo, setNovo] = useState({
     titulo: '', setor: '', desc: '', link_flip: '', link_chat: '',
     tipo_financeiro: '', tipo_backoffice: '', outro_tipo_back: '', data_limite: '', prazo: '24', loc: '', data: '', data_volta: '', horario_ida: '', horario_volta: '', cia: '', forn: '',
@@ -58,7 +58,6 @@ const App = () => {
     localStorage.setItem('theme', JSON.stringify(darkMode));
   }, [darkMode]);
 
-  // RELÓGIO DO TIMER (Atualiza a cada 1 minuto)
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 60000);
     return () => clearInterval(timer);
@@ -67,13 +66,11 @@ const App = () => {
   const carregarDados = async () => {
     if (!usuarioLogado) return;
     try {
-      const [resT, resC, resU] = await Promise.all([
+      const [resT, resU] = await Promise.all([
         axios.get(`${API_URL}/tarefas/`),
-        axios.get(`${API_URL}/chat/`),
         axios.get(`${API_URL}/usuarios/`)
       ]);
       setTarefas(resT.data || []);
-      setChatGlobal(resC.data || []);
       setListaUsuarios(resU.data || []);
     } catch (e) { console.log("Erro na rede..."); }
   };
@@ -86,6 +83,21 @@ const App = () => {
       return () => clearInterval(i);
     }
   }, [usuarioLogado]);
+
+  useEffect(() => {
+    let interval;
+    if (chatAtivo && usuarioLogado) {
+      const puxarChatPrivado = async () => {
+        try {
+          const r = await axios.get(`${API_URL}/chat_privado/?usuario1=${usuarioLogado.nome}&usuario2=${chatAtivo.nome}`);
+          setMensagensChat(r.data || []);
+        } catch(e) { console.error("Erro ao puxar chat privado", e) }
+      };
+      puxarChatPrivado();
+      interval = setInterval(puxarChatPrivado, 2000);
+    }
+    return () => { if (interval) clearInterval(interval); }
+  }, [chatAtivo, usuarioLogado]);
 
   useEffect(() => {
     if (tarefaAberta) {
@@ -128,7 +140,7 @@ const App = () => {
     }
   }, [tarefaAberta]);
 
-  useEffect(() => { fimDoChatRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatGlobal]);
+  useEffect(() => { fimDoChatRef.current?.scrollIntoView({ behavior: "smooth" }); }, [mensagensChat]);
 
   // --- 3. AÇÕES ---
   const mudarStatus = async (id, novoStatus, e) => {
@@ -240,7 +252,26 @@ const App = () => {
     axios.get(`${API_URL}/tarefas/${tarefaAberta.id}/comentarios/`).then(res => setComentarios(res.data || []));
   };
 
-  const baixarArquivo = (url) => window.open(`${API_URL}/${url}`, '_blank');
+  // 🚀 NOVA ENGENHARIA DE DOWNLOAD (Força o navegador a salvar o arquivo e não apenas abrir)
+  const baixarArquivo = async (url) => {
+    try {
+      const response = await fetch(`${API_URL}/${url}`);
+      if (!response.ok) throw new Error("Erro na rede");
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = url.split('/').pop(); // Extrai e define o nome original
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Erro ao baixar, tentando fallback...", error);
+      window.open(`${API_URL}/${url}`, '_blank');
+    }
+  };
+
   const buscarTexto = (txt) => txt ? txt.toLowerCase().includes(filtroBusca.toLowerCase()) : false;
 
   const tarefasFiltradas = tarefas.filter(t => {
@@ -329,7 +360,6 @@ const App = () => {
                 </div>
               )}
 
-              {/* MÓDULO EXCLUSIVO DE EMISSÃO COM SELETOR DE IDA E VOLTA E HORÁRIOS */}
               {novo.setor === 'Emissão' && (() => {
                 const totalPax = (parseInt(novo.adultos)||0) + (parseInt(novo.criancas)||0) + (parseInt(novo.bebes)||0);
                 return (
@@ -402,7 +432,6 @@ const App = () => {
                 <input placeholder={novo.setor === 'Emissão' ? "LOC (Se houver)" : "LOC"} value={novo.loc} onChange={e => setNovo({...novo, loc: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 <input placeholder="Cia Aérea" value={novo.cia} onChange={e => setNovo({...novo, cia: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 
-                {/* Oculta Data do Voo para Emissão, Back-office E Financeiro */}
                 {novo.setor !== 'Emissão' && novo.setor !== 'Back-office' && novo.setor !== 'Financeiro' && (
                     <input type="date" value={novo.data} onChange={e => setNovo({...novo, data: e.target.value})} style={{ flex: 1, padding: '10px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', color: 'var(--text-color)', borderRadius: '8px' }} />
                 )}
@@ -486,45 +515,123 @@ const App = () => {
       </div>
 
       <div style={{ width: '320px', background: 'var(--header-bg)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
-          <h4 style={{ margin: '0 0 15px 0' }}>Equipe Flip</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {listaUsuarios.map(u => {
-              const isOnline = u.nome === usuarioLogado.nome || (u.nome.toLowerCase() !== 'renata' && u.nome.toLowerCase() !== 'diego');
-              return (
-                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#00b894' : '#ff7675' }}></div>
-                  <span style={{ opacity: isOnline ? 1 : 0.6 }}>{u.nome}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '15px' }}>
-          {chatGlobal.map(m => (
-            <div key={m.id} style={{ background: 'var(--card-bg)', padding: '10px', borderRadius: '10px', marginBottom: '10px' }}>
-              <strong style={{ fontSize: '11px', color: 'var(--accent-color)' }}>{m.remetente}</strong>
-              <div style={{ fontSize: '12px' }}>{m.texto}</div>
+        {!chatAtivo ? (
+          <>
+            <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)' }}>
+              <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}><MessageCircle size={18} color="var(--accent-color)" /> Chat Equipe</h4>
             </div>
-          ))}
-          <div ref={fimDoChatRef}/>
-        </div>
-        <form onSubmit={async (e) => {
-          e.preventDefault();
-          if(!novaMsgGlobal.trim()) return;
-          try {
-            const fd = new FormData();
-            fd.append('remetente', usuarioLogado.nome);
-            fd.append('setor', usuarioLogado.setor);
-            fd.append('texto', novaMsgGlobal);
-            await axios.post(`${API_URL}/chat/`, fd);
-            setNovaMsgGlobal('');
-            carregarDados();
-          } catch (err) { console.error("Erro Chat:", err); }
-        }} style={{ padding: '15px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '5px' }}>
-          <input placeholder="Chat..." value={novaMsgGlobal} onChange={e => setNovaMsgGlobal(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)' }} />
-          <button type="submit" style={{ padding: '10px', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px' }}><Send size={16}/></button>
-        </form>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {listaUsuarios.filter(u => u.nome !== usuarioLogado.nome).map(u => {
+                const isOnline = u.nome.toLowerCase() !== 'renata' && u.nome.toLowerCase() !== 'diego';
+                return (
+                  <div key={u.id} onClick={() => setChatAtivo(u)} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 15px', background: 'var(--card-bg)', borderRadius: '12px', cursor: 'pointer', border: '1px solid var(--border-color)', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: 'var(--border-color)', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold', color: 'var(--text-color)' }}>
+                        {u.nome.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ position: 'absolute', bottom: 0, right: 0, width: '10px', height: '10px', borderRadius: '50%', background: isOnline ? '#00b894' : '#ff7675', border: '2px solid var(--card-bg)' }}></div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 'bold', fontSize: '13px' }}>{u.nome}</span>
+                      <span style={{ fontSize: '11px', opacity: 0.5 }}>{u.setor}</span>
+                    </div>
+                    <MessageCircle size={16} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ padding: '15px 20px', borderBottom: '1px solid var(--border-color)', background: 'var(--card-bg)', display: 'flex', alignItems: 'center', gap: '15px' }}>
+              <button onClick={() => setChatAtivo(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-color)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}>
+                <ChevronLeft size={24} />
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--accent-color)', color: '#fff', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: 'bold' }}>
+                  {chatAtivo.nome.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px' }}>{chatAtivo.nome}</h4>
+                  <small style={{ fontSize: '10px', opacity: 0.6, color: '#00b894' }}>Online</small>
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', padding: '15px', display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: 'var(--bg-color)' }}>
+              {mensagensChat.length === 0 && <div style={{ textAlign: 'center', opacity: 0.5, marginTop: '20px', fontSize: '12px' }}>Envie a primeira mensagem para {chatAtivo.nome}.</div>}
+              {mensagensChat.map(m => {
+                const souEu = m.remetente === usuarioLogado.nome;
+                return (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: souEu ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ background: souEu ? '#0984e3' : 'var(--card-bg)', color: souEu ? '#fff' : 'var(--text-color)', padding: '10px 15px', borderRadius: '15px', borderBottomRightRadius: souEu ? '0px' : '15px', borderBottomLeftRadius: souEu ? '15px' : '0px', maxWidth: '85%', border: souEu ? 'none' : '1px solid var(--border-color)', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+                      
+                      <span style={{ fontSize: '10px', fontWeight: 'bold', opacity: souEu ? 0.9 : 0.6, display: 'block', marginBottom: '4px' }}>
+                        {m.remetente}
+                      </span>
+                      
+                      <div style={{ fontSize: '13px', lineHeight: '1.4' }}>{m.texto}</div>
+                      
+                      {/* 🚀 MINIATURA PREMIUM DE ANEXO DO CHAT PRIVADO */}
+                      {m.arquivo && (() => {
+                          const fileName = m.arquivo.split('/').pop();
+                          const isImage = fileName.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                          return (
+                              <div onClick={() => baixarArquivo(m.arquivo)} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', padding: '6px', background: souEu ? 'rgba(0,0,0,0.15)' : 'var(--bg-color)', border: souEu ? '1px solid rgba(255,255,255,0.2)' : '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}>
+                                  {isImage ? (
+                                      <img src={`${API_URL}/${m.arquivo}`} alt="anexo" style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px' }} />
+                                  ) : (
+                                      <div style={{ width: '28px', height: '28px', background: souEu ? 'rgba(255,255,255,0.2)' : 'rgba(0,184,148,0.1)', color: souEu ? '#fff' : '#00b894', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '4px' }}>
+                                          <Paperclip size={14} />
+                                      </div>
+                                  )}
+                                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                      <span style={{ fontSize: '11px', fontWeight: 'bold', maxWidth: '130px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: souEu ? '#fff' : 'var(--text-color)' }}>{fileName}</span>
+                                      <span style={{ fontSize: '9px', color: souEu ? 'rgba(255,255,255,0.8)' : '#00b894', marginTop: '2px' }}>⬇ Baixar arquivo</span>
+                                  </div>
+                              </div>
+                          );
+                      })()}
+
+                      <small style={{ fontSize: '9px', opacity: souEu ? 0.8 : 0.5, display: 'block', textAlign: 'right', marginTop: '5px' }}>
+                        {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </small>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={fimDoChatRef}/>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if(!novaMsgChat.trim() && !arquivoChat) return;
+              try {
+                const fd = new FormData();
+                fd.append('remetente', usuarioLogado.nome);
+                fd.append('destinatario', chatAtivo.nome);
+                fd.append('texto', novaMsgChat || "Arquivo anexado");
+                if (arquivoChat) fd.append('arquivo', arquivoChat);
+                
+                await axios.post(`${API_URL}/chat_privado/`, fd);
+                setNovaMsgChat('');
+                setArquivoChat(null);
+                
+                const r = await axios.get(`${API_URL}/chat_privado/?usuario1=${usuarioLogado.nome}&usuario2=${chatAtivo.nome}`);
+                setMensagensChat(r.data || []);
+              } catch (err) { console.error(err); }
+            }} style={{ padding: '15px', borderTop: '1px solid var(--border-color)', background: 'var(--card-bg)', display: 'flex', gap: '8px', alignItems: 'center' }}>
+              
+              <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                <Paperclip size={20} color={arquivoChat ? "#0984e3" : "gray"}/>
+                <input type="file" onChange={e => setArquivoChat(e.target.files[0])} style={{ display: 'none' }} />
+              </label>
+
+              <input placeholder={`Mensagem para ${chatAtivo.nome}...`} value={novaMsgChat} onChange={e => setNovaMsgChat(e.target.value)} style={{ flex: 1, padding: '12px', borderRadius: '12px', background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', outline: 'none' }} />
+              <button type="submit" style={{ padding: '12px', background: '#0984e3', color: '#fff', border: 'none', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><Send size={18}/></button>
+            </form>
+          </>
+        )}
       </div>
 
       {tarefaAberta && (() => {
@@ -545,14 +652,12 @@ const App = () => {
                   <X onClick={() => setTarefaAberta(null)} cursor="pointer" />
                 </div>
                 
-                {/* TABELA GENÉRICA: SÓ APARECE SE NÃO FOR EMISSÃO */}
                 {tarefaAberta.setor_destino !== 'Emissão' && (
                     <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '25px', border: '1px solid var(--border-color)' }}>
                       <tbody>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold', width: '35%' }}>Localizador</td><td style={{ padding: '12px' }}>{get("LOC")}</td></tr>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}><td style={{ padding: '12px', background: 'rgba(128,128,128,0.1)', fontWeight: 'bold' }}>Cia Aérea</td><td style={{ padding: '12px' }}>{get("CIA")}</td></tr>
                         
-                        {/* OCULTA DATA E HORÁRIO SE O CARD FOR DO BACK-OFFICE OU FINANCEIRO */}
                         {tarefaAberta.setor_destino !== 'Back-office' && tarefaAberta.setor_destino !== 'Financeiro' && (
                           <>
                             <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
@@ -755,14 +860,37 @@ const App = () => {
                   {chatL && chatL !== 'N/A' && <a href={chatL.startsWith('http') ? chatL : `https://${chatL}`} target="_blank" rel="noreferrer" style={{ flex: 1, textAlign: 'center', background: '#6c5ce7', color: '#fff', padding: '12px', borderRadius: '10px', textDecoration: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}><ExternalLink size={16}/> CHAT CLIENTE</a>}
                 </div>
               </div>
+              
+              {/* 🚀 HISTÓRICO DO CARD COM A NOVA MINIATURA DE ANEXO */}
               <div style={{ width: '400px', display: 'flex', flexDirection: 'column', background: 'var(--bg-color)' }}>
-                <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', fontWeight: 'bold' }}>Histórico</div>
+                <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', fontWeight: 'bold' }}>Histórico do Card</div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
                   {comentarios.map(c => (
-                    <div key={c.id} style={{ background: 'var(--card-bg)', padding: '12px', borderRadius: '12px', marginBottom: '10px', border: '1px solid var(--border-color)' }}>
-                      <strong style={{ color: 'var(--accent-color)', fontSize: '11px' }}>{c.autor}</strong>
-                      <p style={{ fontSize: '13px' }}>{c.texto}</p>
-                      {c.arquivo && <button onClick={() => baixarArquivo(c.arquivo)} style={{ background: '#00b894', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '5px', fontSize: '10px', cursor: 'pointer' }}>Download</button>}
+                    <div key={c.id} style={{ background: 'var(--card-bg)', padding: '15px', borderRadius: '12px', marginBottom: '15px', border: '1px solid var(--border-color)', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                      <strong style={{ color: 'var(--accent-color)', fontSize: '12px' }}>{c.autor}</strong>
+                      <p style={{ fontSize: '13px', marginTop: '6px', lineHeight: '1.4' }}>{c.texto}</p>
+                      
+                      {/* MINIATURA PREMIUM */}
+                      {c.arquivo && (() => {
+                          const fileName = c.arquivo.split('/').pop();
+                          const isImage = fileName.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                          return (
+                              <div onClick={() => baixarArquivo(c.arquivo)} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px', padding: '8px', background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', width: 'fit-content', transition: '0.2s' }} onMouseEnter={e => e.currentTarget.style.borderColor = '#00b894'} onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}>
+                                  {isImage ? (
+                                      <img src={`${API_URL}/${c.arquivo}`} alt="anexo" style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-color)' }} />
+                                  ) : (
+                                      <div style={{ width: '36px', height: '36px', background: 'rgba(0,184,148,0.1)', color: '#00b894', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: '4px' }}>
+                                          <Paperclip size={18} />
+                                      </div>
+                                  )}
+                                  <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingRight: '10px' }}>
+                                      <span style={{ fontSize: '12px', fontWeight: 'bold', maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-color)' }}>{fileName}</span>
+                                      <span style={{ fontSize: '10px', color: '#00b894', marginTop: '2px' }}>⬇ Clique para baixar</span>
+                                  </div>
+                              </div>
+                          );
+                      })()}
+
                     </div>
                   ))}
                 </div>
